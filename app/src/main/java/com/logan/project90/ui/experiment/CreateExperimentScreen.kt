@@ -1,23 +1,22 @@
 package com.logan.project90.ui.experiment
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.logan.project90.core.util.formatDisplayDate
 import com.logan.project90.core.util.todayLocalDate
 import com.logan.project90.di.AppContainer
+import com.logan.project90.ui.components.AppScreen
+import com.logan.project90.ui.components.InlineMessage
+import com.logan.project90.ui.components.LabeledValue
+import com.logan.project90.ui.components.MessageTone
+import com.logan.project90.ui.components.PrimaryButton
+import com.logan.project90.ui.components.ScreenIntro
+import com.logan.project90.ui.components.ScreenSection
 import com.logan.project90.ui.welcome.simpleFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,25 +66,27 @@ fun CreateExperimentScreen(
     onNameChanged: (String) -> Unit,
     onCreate: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(text = "Create Experiment", style = MaterialTheme.typography.headlineSmall)
-        OutlinedTextField(
-            value = uiState.name,
-            onValueChange = onNameChanged,
-            label = { Text("Experiment name") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+    AppScreen {
+        ScreenIntro(
+            title = "Create Experiment",
+            subtitle = "Name the 90-day experiment you want to run."
         )
-        Text(text = "Start date: ${formatDisplayDate(uiState.startDate)}")
-        Text(text = "End date: ${formatDisplayDate(uiState.calculatedEndDate)}")
-        uiState.error?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-        Button(onClick = onCreate, enabled = uiState.name.isNotBlank()) {
-            Text(text = "Create 90-day experiment")
+        ScreenSection(title = "Experiment Setup") {
+            OutlinedTextField(
+                value = uiState.name,
+                onValueChange = onNameChanged,
+                label = { androidx.compose.material3.Text("Experiment name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            LabeledValue("Start date", formatDisplayDate(uiState.startDate))
+            LabeledValue("End date", formatDisplayDate(uiState.calculatedEndDate))
+            uiState.error?.let { InlineMessage(text = it, tone = MessageTone.ERROR) }
+            PrimaryButton(
+                text = "Create 90-day experiment",
+                onClick = onCreate,
+                enabled = uiState.name.isNotBlank()
+            )
         }
     }
 }

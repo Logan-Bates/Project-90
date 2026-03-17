@@ -5,11 +5,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
 private val AppColors = lightColorScheme(
-    primary = Slate,
-    secondary = Clay,
-    tertiary = Moss,
-    background = Sand,
-    surface = Sand
+    primary = Ink,
+    secondary = Steel,
+    tertiary = Teal,
+    background = Cloud,
+    surface = Cloud,
+    surfaceVariant = Mist
 )
 
 @Composable

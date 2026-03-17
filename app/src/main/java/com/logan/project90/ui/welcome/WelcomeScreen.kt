@@ -1,20 +1,17 @@
 package com.logan.project90.ui.welcome
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.logan.project90.di.AppContainer
 import com.logan.project90.domain.model.Identity
+import com.logan.project90.ui.components.AppCard
+import com.logan.project90.ui.components.AppScreen
+import com.logan.project90.ui.components.PrimaryButton
+import com.logan.project90.ui.components.ScreenIntro
+import com.logan.project90.ui.components.SupportText
+import com.logan.project90.ui.components.MessageTone
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -63,16 +60,21 @@ fun WelcomeScreen(
     uiState: WelcomeUiState,
     onContinue: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(text = "Project 90", style = MaterialTheme.typography.headlineMedium)
-        Text(text = "Create one experiment, one identity, and log one day with PRD-backed scoring.")
-        Button(onClick = onContinue) {
-            Text(if (uiState.onboardingComplete) "Continue" else "Start")
+    AppScreen {
+        ScreenIntro(
+            title = "Project 90",
+            subtitle = "Create one experiment, one identity, and log one day with PRD-backed scoring."
+        )
+        AppCard {
+            SupportText(
+                text = if (uiState.hasIdentity) "Your current slice is ready to continue."
+                else "Build a focused 90-day system around consistent daily action.",
+                tone = MessageTone.INFO
+            )
+            PrimaryButton(
+                text = if (uiState.onboardingComplete) "Continue" else "Start",
+                onClick = onContinue
+            )
         }
     }
 }

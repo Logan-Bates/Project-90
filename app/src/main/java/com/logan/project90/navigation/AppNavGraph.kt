@@ -5,14 +5,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.logan.project90.di.AppContainer
 import com.logan.project90.ui.experiment.CreateExperimentScreen
 import com.logan.project90.ui.experiment.CreateExperimentViewModel
 import com.logan.project90.ui.identity.CreateIdentityScreen
 import com.logan.project90.ui.identity.CreateIdentityViewModel
+import com.logan.project90.ui.identity.PresetSelectionScreen
 import com.logan.project90.ui.timebudget.TimeBudgetScreen
 import com.logan.project90.ui.timebudget.TimeBudgetViewModel
 import com.logan.project90.ui.today.TodayScreen
@@ -40,7 +43,7 @@ fun AppNavGraph(
                     val target = when {
                         !uiState.onboardingComplete -> AppDestination.TimeBudget.route
                         !uiState.hasExperiment -> AppDestination.CreateExperiment.route
-                        !uiState.hasIdentity -> AppDestination.CreateIdentity.route
+                        !uiState.hasIdentity -> AppDestination.PresetSelection.route
                         else -> AppDestination.Today.route
                     }
                     navController.navigate(target)
@@ -69,14 +72,34 @@ fun AppNavGraph(
                 onNameChanged = viewModel::updateName,
                 onCreate = {
                     viewModel.createExperiment {
-                        navController.navigate(AppDestination.CreateIdentity.route)
+                        navController.navigate(AppDestination.PresetSelection.route)
                     }
                 }
             )
         }
-        composable(AppDestination.CreateIdentity.route) {
+        composable(AppDestination.PresetSelection.route) {
+            PresetSelectionScreen(
+                onPresetSelected = { presetId ->
+                    navController.navigate(AppDestination.CreateIdentity.route(presetId))
+                },
+                onCreateCustom = {
+                    navController.navigate(AppDestination.CreateIdentity.route())
+                }
+            )
+        }
+        composable(
+            route = AppDestination.CreateIdentity.route,
+            arguments = listOf(
+                navArgument("presetId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = ""
+                }
+            )
+        ) { backStackEntry ->
+            val presetId = backStackEntry.arguments?.getString("presetId").orEmpty().ifBlank { null }
             val viewModel: CreateIdentityViewModel =
-                viewModel(factory = CreateIdentityViewModel.factory(appContainer))
+                viewModel(factory = CreateIdentityViewModel.factory(appContainer, presetId))
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             CreateIdentityScreen(
                 uiState = uiState,

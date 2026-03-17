@@ -3,6 +3,7 @@ package com.logan.project90.domain.usecase
 import com.logan.project90.core.model.IdentityCategory
 import com.logan.project90.core.model.IdentityStatus
 import com.logan.project90.core.model.ResistanceLevel
+import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.domain.model.DailyLog
 import com.logan.project90.domain.model.Experiment
 import com.logan.project90.domain.model.Identity
@@ -38,7 +39,7 @@ class CreateExperimentUseCase(
         startDate: LocalDate,
         durationDays: Int = 90
     ): Result<Long> {
-        if (name.isBlank()) return Result.failure(IllegalArgumentException("Experiment name is required."))
+        if (name.isBlank()) return Result.failure(IllegalArgumentException(ValidationMessages.experimentNameRequired))
         if (experimentRepository.getFirstExperiment() != null) {
             return Result.failure(IllegalStateException("This slice supports exactly one experiment in the UI."))
         }
@@ -66,32 +67,32 @@ class CreateIdentityUseCase(
         importanceWeight: Int,
         createdDate: LocalDate
     ): Result<Pair<Long, String?>> {
-        if (name.isBlank()) return Result.failure(IllegalArgumentException("Identity name is required."))
-        if (statement.isBlank()) return Result.failure(IllegalArgumentException("Identity statement is required."))
-        if (floorMinutes <= 0) return Result.failure(IllegalArgumentException("Floor must be greater than 0."))
+        if (name.isBlank()) return Result.failure(IllegalArgumentException(ValidationMessages.identityNameRequired))
+        if (statement.isBlank()) return Result.failure(IllegalArgumentException(ValidationMessages.identityStatementRequired))
+        if (floorMinutes <= 0) return Result.failure(IllegalArgumentException(ValidationMessages.minutesRange1To1440))
         if (pushMinutes <= floorMinutes) {
-            return Result.failure(IllegalArgumentException("Push must be greater than floor."))
+            return Result.failure(IllegalArgumentException(ValidationMessages.pushGreaterThanFloor))
         }
         if (pushMinutes > floorMinutes * 3) {
-            return Result.failure(IllegalArgumentException("Push cannot exceed 3x floor."))
+            return Result.failure(IllegalArgumentException(ValidationMessages.pushMaxThreeTimesFloor))
         }
         if (importanceWeight !in 1..3) {
-            return Result.failure(IllegalArgumentException("Importance weight must be 1-3."))
+            return Result.failure(IllegalArgumentException(ValidationMessages.range1To3))
         }
         if (identityRepository.categoryExists(experimentId, category)) {
             return Result.failure(
-                IllegalStateException("Only one identity per category is allowed per experiment.")
+                IllegalStateException(ValidationMessages.oneIdentityPerCategory)
             )
         }
 
         val available = settingsRepository.discretionaryTimeMinutes.first()
         val warning = buildString {
             if (floorMinutes > 90) {
-                append("This floor may reduce long-term consistency. Consider lowering it.")
+                append(ValidationMessages.floorBurnoutRisk)
             }
             if (available != null && floorMinutes > available / 2) {
                 if (isNotEmpty()) append("\n")
-                append("Floor exceeds 50% of discretionary time.")
+                append(ValidationMessages.floorOverTimeBudget)
             }
         }.ifBlank { null }
 
@@ -122,19 +123,19 @@ class LogIdentityDayUseCase(
         resistance: ResistanceLevel,
         reflection: String
     ): Result<SaveLogResult> {
-        if (effortMinutes < 0) return Result.failure(IllegalArgumentException("Effort cannot be negative."))
-        if (energy !in 1..5) return Result.failure(IllegalArgumentException("Energy must be 1-5."))
-        if (mood !in 1..5) return Result.failure(IllegalArgumentException("Mood must be 1-5."))
+        if (effortMinutes < 0) return Result.failure(IllegalArgumentException(ValidationMessages.effortRange0To1440))
+        if (energy !in 1..5) return Result.failure(IllegalArgumentException(ValidationMessages.range1To5))
+        if (mood !in 1..5) return Result.failure(IllegalArgumentException(ValidationMessages.range1To5))
 
         val warning = when {
             status == IdentityStatus.MISSED && effortMinutes > 0 ->
-                "Status is Missed but effort minutes are greater than zero."
+                ValidationMessages.missedCannotIncludeEffort
             status == IdentityStatus.FLOOR_PROTECTED && effortMinutes < identity.floorMinutes ->
-                "Floor Protected is below the configured floor minutes."
+                ValidationMessages.floorProtectedBelowFloor
             status == IdentityStatus.FLOOR_PROTECTED && effortMinutes >= identity.pushMinutes ->
-                "Effort meets or exceeds Push, but status is Floor Protected."
+                ValidationMessages.floorProtectedAtPush
             status == IdentityStatus.PUSH_EXECUTED && effortMinutes < identity.pushMinutes ->
-                "Push Executed is below the configured push minutes."
+                ValidationMessages.pushExecutedBelowPush
             else -> null
         }
 

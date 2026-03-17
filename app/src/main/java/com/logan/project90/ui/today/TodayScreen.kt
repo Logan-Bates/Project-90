@@ -1,21 +1,14 @@
 package com.logan.project90.ui.today
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,11 +23,18 @@ import com.logan.project90.core.model.IdentityStatus
 import com.logan.project90.core.model.ResistanceLevel
 import com.logan.project90.core.util.formatDisplayDate
 import com.logan.project90.core.util.todayLocalDate
+import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.di.AppContainer
 import com.logan.project90.domain.model.TodaySlice
+import com.logan.project90.ui.components.AppScreen
+import com.logan.project90.ui.components.InlineMessage
 import com.logan.project90.ui.components.LabeledValue
+import com.logan.project90.ui.components.MessageTone
 import com.logan.project90.ui.components.NumberField
+import com.logan.project90.ui.components.PrimaryButton
+import com.logan.project90.ui.components.ScreenIntro
 import com.logan.project90.ui.components.ScreenSection
+import com.logan.project90.ui.components.SupportText
 import com.logan.project90.ui.welcome.simpleFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,11 +62,11 @@ data class TodayUiState(
     val inputError: String?
         get() = when {
             effortValue == null || effortValue !in 0..1440 ->
-                "Effort minutes must be between 0 and 1,440."
+                ValidationMessages.effortRange0To1440
             energyValue == null || energyValue !in 1..5 ->
-                "Energy must be a whole number from 1 to 5."
+                ValidationMessages.range1To5
             moodValue == null || moodValue !in 1..5 ->
-                "Mood must be a whole number from 1 to 5."
+                ValidationMessages.range1To5
             else -> null
         }
     val canSave: Boolean
@@ -118,22 +118,22 @@ class TodayViewModel(private val appContainer: AppContainer) : ViewModel() {
     fun saveLog() {
         val current = uiState.value
         val identity = current.slice.identity ?: run {
-            inputs.value = inputs.value.copy(saveError = "Create an identity before logging.")
+            inputs.value = inputs.value.copy(saveError = ValidationMessages.createIdentityBeforeLogging)
             return
         }
         val effortMinutes = current.effortValue
         val energy = current.energyValue
         val mood = current.moodValue
         if (effortMinutes == null || effortMinutes !in 0..1440) {
-            inputs.value = inputs.value.copy(saveError = "Effort minutes must be between 0 and 1,440.", saveWarning = null)
+            inputs.value = inputs.value.copy(saveError = ValidationMessages.effortRange0To1440, saveWarning = null)
             return
         }
         if (energy == null || energy !in 1..5) {
-            inputs.value = inputs.value.copy(saveError = "Energy must be a whole number from 1 to 5.", saveWarning = null)
+            inputs.value = inputs.value.copy(saveError = ValidationMessages.range1To5, saveWarning = null)
             return
         }
         if (mood == null || mood !in 1..5) {
-            inputs.value = inputs.value.copy(saveError = "Mood must be a whole number from 1 to 5.", saveWarning = null)
+            inputs.value = inputs.value.copy(saveError = ValidationMessages.range1To5, saveWarning = null)
             return
         }
         viewModelScope.launch {
@@ -174,34 +174,37 @@ fun TodayScreen(
     var statusExpanded by remember { mutableStateOf(false) }
     var resistanceExpanded by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(text = "Today", style = MaterialTheme.typography.headlineSmall)
-        ScreenSection(title = "Active Slice") {
+    AppScreen(scrollable = true) {
+        ScreenIntro(
+            title = "Today",
+            subtitle = "Log the day clearly, then review the saved result and current momentum."
+        )
+        ScreenSection(title = "Experiment") {
             LabeledValue("Date", formatDisplayDate(todayLocalDate()))
             LabeledValue("Experiment", uiState.slice.experiment?.name ?: "Not created")
-            LabeledValue("Identity", uiState.slice.identity?.name ?: "Not created")
         }
-        ScreenSection(title = "Metrics") {
-            LabeledValue("Strength14", formatScore(uiState.slice.analytics?.strength14))
-            LabeledValue("Momentum", formatScore(uiState.slice.analytics?.momentum))
-            LabeledValue("Strength7", formatScore(uiState.slice.analytics?.strength7))
-            LabeledValue("PushFreq14", formatScore(uiState.slice.analytics?.pushFreq14))
-            LabeledValue("RecoveryBalance14", formatScore(uiState.slice.analytics?.recoveryBalance14))
-        }
-        ScreenSection(title = "Log Today") {
+        ScreenSection(title = "Today Action") {
+            androidx.compose.material3.Text(
+                text = if (uiState.slice.todayLog == null) "Not logged yet"
+                else "Logged today"
+            )
+            uiState.slice.todayLog?.let { log ->
+                LabeledValue("Saved status", log.status.name)
+                LabeledValue("Saved effort", "${log.effortMinutes} min")
+                LabeledValue("Saved energy", log.energy.toString())
+                LabeledValue("Saved mood", log.mood.toString())
+                LabeledValue("Saved resistance", log.resistance.name)
+            }
+            if (uiState.slice.todayLog != null) {
+                SupportText(text = "You can edit today's values and save again.")
+            }
             NumberField(value = uiState.effortMinutes, onValueChange = onEffortChanged, label = "Effort minutes")
             ExposedDropdownMenuBox(expanded = statusExpanded, onExpandedChange = { statusExpanded = !statusExpanded }) {
                 OutlinedTextField(
                     value = uiState.status.name,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Status") },
+                    label = { androidx.compose.material3.Text("Status") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = statusExpanded) },
                     modifier = Modifier.menuAnchor().fillMaxWidth()
                 )
@@ -211,7 +214,7 @@ fun TodayScreen(
                 ) {
                     IdentityStatus.entries.forEach { status ->
                         DropdownMenuItem(
-                            text = { Text(status.name) },
+                            text = { androidx.compose.material3.Text(status.name) },
                             onClick = {
                                 onStatusChanged(status)
                                 statusExpanded = false
@@ -230,7 +233,7 @@ fun TodayScreen(
                     value = uiState.resistance.name,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Resistance") },
+                    label = { androidx.compose.material3.Text("Resistance") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = resistanceExpanded) },
                     modifier = Modifier.menuAnchor().fillMaxWidth()
                 )
@@ -240,7 +243,7 @@ fun TodayScreen(
                 ) {
                     ResistanceLevel.entries.forEach { resistance ->
                         DropdownMenuItem(
-                            text = { Text(resistance.name) },
+                            text = { androidx.compose.material3.Text(resistance.name) },
                             onClick = {
                                 onResistanceChanged(resistance)
                                 resistanceExpanded = false
@@ -252,15 +255,36 @@ fun TodayScreen(
             OutlinedTextField(
                 value = uiState.reflection,
                 onValueChange = onReflectionChanged,
-                label = { Text("Reflection") },
+                label = { androidx.compose.material3.Text("Reflection") },
                 modifier = Modifier.fillMaxWidth()
             )
-            uiState.inputError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-            uiState.saveWarning?.let { Text(text = it, color = MaterialTheme.colorScheme.tertiary) }
-            uiState.saveError?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-            Button(onClick = onSave, enabled = uiState.canSave) {
-                Text(text = "Save today")
+            uiState.inputError?.let { InlineMessage(text = it, tone = MessageTone.ERROR) }
+            uiState.saveWarning?.let { InlineMessage(text = it, tone = MessageTone.WARNING) }
+            uiState.saveError?.let { InlineMessage(text = it, tone = MessageTone.ERROR) }
+            PrimaryButton(
+                text = if (uiState.slice.todayLog == null) "Save today" else "Update today",
+                onClick = onSave,
+                enabled = uiState.canSave
+            )
+        }
+        ScreenSection(title = "Identity") {
+            LabeledValue("Name", uiState.slice.identity?.name ?: "Not created")
+            LabeledValue("Category", uiState.slice.identity?.category?.name ?: "--")
+            LabeledValue("Floor", uiState.slice.identity?.floorMinutes?.let { "$it min" } ?: "--")
+            LabeledValue("Push", uiState.slice.identity?.pushMinutes?.let { "$it min" } ?: "--")
+            uiState.slice.identity?.statement?.let {
+                androidx.compose.material3.Text(
+                    text = it,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
+                )
             }
+        }
+        ScreenSection(title = "Metrics") {
+            LabeledValue("Strength14", formatScore(uiState.slice.analytics?.strength14))
+            LabeledValue("Momentum", formatScore(uiState.slice.analytics?.momentum))
+            LabeledValue("Strength7", formatScore(uiState.slice.analytics?.strength7))
+            LabeledValue("PushFreq14", formatScore(uiState.slice.analytics?.pushFreq14))
+            LabeledValue("RecoveryBalance14", formatScore(uiState.slice.analytics?.recoveryBalance14))
         }
     }
 }

@@ -1,21 +1,14 @@
 package com.logan.project90.ui.identity
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,8 +21,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.logan.project90.core.model.IdentityCategory
 import com.logan.project90.core.util.todayLocalDate
+import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.di.AppContainer
+import com.logan.project90.domain.preset.IdentityPresets
+import com.logan.project90.ui.components.AppScreen
+import com.logan.project90.ui.components.InlineMessage
+import com.logan.project90.ui.components.MessageTone
 import com.logan.project90.ui.components.NumberField
+import com.logan.project90.ui.components.PrimaryButton
+import com.logan.project90.ui.components.ScreenIntro
+import com.logan.project90.ui.components.ScreenSection
 import com.logan.project90.ui.welcome.simpleFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,15 +51,23 @@ data class CreateIdentityUiState(
     val floorValue: Int? get() = floorMinutes.toIntOrNull()
     val pushValue: Int? get() = pushMinutes.toIntOrNull()
     val weightValue: Int? get() = importanceWeight.toIntOrNull()
+    val inputError: String?
+        get() = when {
+            name.isBlank() -> ValidationMessages.identityNameRequired
+            statement.isBlank() -> ValidationMessages.identityStatementRequired
+            floorValue == null || floorValue !in 1..1440 -> ValidationMessages.minutesRange1To1440
+            pushValue == null || pushValue !in 1..1440 -> ValidationMessages.minutesRange1To1440
+            weightValue == null || weightValue !in 1..3 -> ValidationMessages.range1To3
+            else -> null
+        }
     val canSave: Boolean
-        get() = name.isNotBlank() &&
-            statement.isNotBlank() &&
-            floorValue in 1..1440 &&
-            pushValue in 1..1440 &&
-            weightValue in 1..3
+        get() = inputError == null
 }
 
-class CreateIdentityViewModel(private val appContainer: AppContainer) : ViewModel() {
+class CreateIdentityViewModel(
+    private val appContainer: AppContainer,
+    presetId: String?
+) : ViewModel() {
     private val _uiState = MutableStateFlow(CreateIdentityUiState())
     val uiState: StateFlow<CreateIdentityUiState> = _uiState.asStateFlow()
 
@@ -66,7 +75,22 @@ class CreateIdentityViewModel(private val appContainer: AppContainer) : ViewMode
         viewModelScope.launch {
             val experiment = appContainer.experimentRepository.getFirstExperiment()
             _uiState.value = _uiState.value.copy(experimentId = experiment?.id ?: 0)
+            applyPreset(presetId)
         }
+    }
+
+    fun applyPreset(presetId: String?) {
+        val preset = IdentityPresets.findById(presetId) ?: return
+        _uiState.value = _uiState.value.copy(
+            name = preset.name,
+            statement = preset.defaultStatement,
+            category = preset.category,
+            floorMinutes = preset.defaultFloorMinutes.toString(),
+            pushMinutes = preset.defaultPushMinutes.toString(),
+            importanceWeight = preset.defaultWeight.toString(),
+            error = null,
+            warning = null
+        )
     }
 
     fun updateName(value: String) { _uiState.value = _uiState.value.copy(name = value, error = null) }
@@ -82,11 +106,11 @@ class CreateIdentityViewModel(private val appContainer: AppContainer) : ViewMode
         val importanceWeight = _uiState.value.weightValue
         val validationError = when {
             floorMinutes == null || floorMinutes !in 1..1440 ->
-                "Floor minutes must be between 1 and 1,440."
+                ValidationMessages.minutesRange1To1440
             pushMinutes == null || pushMinutes !in 1..1440 ->
-                "Push minutes must be between 1 and 1,440."
+                ValidationMessages.minutesRange1To1440
             importanceWeight == null || importanceWeight !in 1..3 ->
-                "Importance must be a whole number from 1 to 3."
+                ValidationMessages.range1To3
             else -> null
         }
         if (validationError != null) {
@@ -118,8 +142,8 @@ class CreateIdentityViewModel(private val appContainer: AppContainer) : ViewMode
     }
 
     companion object {
-        fun factory(appContainer: AppContainer): ViewModelProvider.Factory =
-            simpleFactory { CreateIdentityViewModel(appContainer) }
+        fun factory(appContainer: AppContainer, presetId: String?): ViewModelProvider.Factory =
+            simpleFactory { CreateIdentityViewModel(appContainer, presetId) }
     }
 }
 
@@ -137,63 +161,63 @@ fun CreateIdentityScreen(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(text = "Create Identity", style = MaterialTheme.typography.headlineSmall)
-        OutlinedTextField(
-            value = uiState.name,
-            onValueChange = onNameChanged,
-            label = { Text("Identity name") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+    AppScreen(scrollable = true) {
+        ScreenIntro(
+            title = "Create Identity",
+            subtitle = "Define the daily behavior that will anchor this experiment."
         )
-        OutlinedTextField(
-            value = uiState.statement,
-            onValueChange = onStatementChanged,
-            label = { Text("Identity statement") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+        ScreenSection(title = "Identity Details") {
             OutlinedTextField(
-                value = uiState.category.name,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Category") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth()
+                value = uiState.name,
+                onValueChange = onNameChanged,
+                label = { androidx.compose.material3.Text("Identity name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
             )
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                IdentityCategory.entries.forEach { category ->
-                    DropdownMenuItem(
-                        text = { Text(category.name) },
-                        onClick = {
-                            onCategoryChanged(category)
-                            expanded = false
-                        }
-                    )
+            OutlinedTextField(
+                value = uiState.statement,
+                onValueChange = onStatementChanged,
+                label = { androidx.compose.material3.Text("Identity statement") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                OutlinedTextField(
+                    value = uiState.category.name,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { androidx.compose.material3.Text("Category") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    IdentityCategory.entries.forEach { category ->
+                        DropdownMenuItem(
+                            text = { androidx.compose.material3.Text(category.name) },
+                            onClick = {
+                                onCategoryChanged(category)
+                                expanded = false
+                            }
+                        )
+                    }
                 }
             }
         }
-        NumberField(value = uiState.floorMinutes, onValueChange = onFloorChanged, label = "Floor minutes")
-        NumberField(value = uiState.pushMinutes, onValueChange = onPushChanged, label = "Push minutes")
-        NumberField(value = uiState.importanceWeight, onValueChange = onWeightChanged, label = "Importance (1-3)")
-        uiState.warning?.let { Text(text = it, color = MaterialTheme.colorScheme.tertiary) }
-        uiState.error?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
-        Button(
-            onClick = onSave,
-            enabled = uiState.canSave
-        ) {
-            Text(text = "Save identity")
+        ScreenSection(title = "Daily Targets") {
+            NumberField(value = uiState.floorMinutes, onValueChange = onFloorChanged, label = "Floor minutes")
+            NumberField(value = uiState.pushMinutes, onValueChange = onPushChanged, label = "Push minutes")
+            NumberField(value = uiState.importanceWeight, onValueChange = onWeightChanged, label = "Importance (1-3)")
+            uiState.warning?.let { InlineMessage(text = it, tone = MessageTone.WARNING) }
+            (uiState.error ?: uiState.inputError)?.let { InlineMessage(text = it, tone = MessageTone.ERROR) }
+            PrimaryButton(
+                text = "Save identity",
+                onClick = onSave,
+                enabled = uiState.canSave
+            )
         }
     }
 }
