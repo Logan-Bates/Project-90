@@ -22,6 +22,8 @@ interface ExperimentRepository {
 interface IdentityRepository {
     fun observeFirstIdentityForExperiment(experimentId: Long): Flow<Identity?>
     suspend fun getFirstIdentityForExperiment(experimentId: Long): Identity?
+    suspend fun getIdentityById(identityId: Long): Identity?
+    suspend fun getTotalFloorMinutesForExperiment(experimentId: Long): Int
     suspend fun createIdentity(identity: Identity): Long
     suspend fun categoryExists(experimentId: Long, category: IdentityCategory): Boolean
 }
@@ -30,4 +32,5 @@ interface DailyLogRepository {
     fun observeLog(identityId: Long, date: LocalDate): Flow<DailyLog?>
     suspend fun upsertLog(log: DailyLog)
     suspend fun getLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog>
+    suspend fun getRecentLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog>
 }

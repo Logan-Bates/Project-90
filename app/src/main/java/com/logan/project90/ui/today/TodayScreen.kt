@@ -9,6 +9,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +26,10 @@ import com.logan.project90.core.util.formatDisplayDate
 import com.logan.project90.core.util.todayLocalDate
 import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.di.AppContainer
+import com.logan.project90.domain.model.FeedbackMessage
+import com.logan.project90.domain.model.FeedbackType
 import com.logan.project90.domain.model.TodaySlice
+import com.logan.project90.ui.components.AppCard
 import com.logan.project90.ui.components.AppScreen
 import com.logan.project90.ui.components.InlineMessage
 import com.logan.project90.ui.components.LabeledValue
@@ -169,7 +173,8 @@ fun TodayScreen(
     onMoodChanged: (String) -> Unit,
     onResistanceChanged: (ResistanceLevel) -> Unit,
     onReflectionChanged: (String) -> Unit,
-    onSave: () -> Unit
+    onSave: () -> Unit,
+    onOpenIdentity: (Long) -> Unit
 ) {
     var statusExpanded by remember { mutableStateOf(false) }
     var resistanceExpanded by remember { mutableStateOf(false) }
@@ -267,16 +272,46 @@ fun TodayScreen(
                 enabled = uiState.canSave
             )
         }
-        ScreenSection(title = "Identity") {
-            LabeledValue("Name", uiState.slice.identity?.name ?: "Not created")
-            LabeledValue("Category", uiState.slice.identity?.category?.name ?: "--")
-            LabeledValue("Floor", uiState.slice.identity?.floorMinutes?.let { "$it min" } ?: "--")
-            LabeledValue("Push", uiState.slice.identity?.pushMinutes?.let { "$it min" } ?: "--")
-            uiState.slice.identity?.statement?.let {
+        if (uiState.slice.feedback.isNotEmpty()) {
+            ScreenSection(title = "Feedback") {
+                uiState.slice.feedback.forEach { feedback ->
+                    androidx.compose.material3.Text(
+                        text = feedback.title,
+                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall
+                    )
+                    InlineMessage(
+                        text = feedback.message,
+                        tone = feedback.messageTone()
+                    )
+                }
+            }
+        }
+        if (uiState.slice.identity != null) {
+            AppCard(onClick = { onOpenIdentity(uiState.slice.identity.id) }) {
                 androidx.compose.material3.Text(
-                    text = it,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
+                    text = "Identity",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium
                 )
+                LabeledValue("Name", uiState.slice.identity.name)
+                LabeledValue("Category", uiState.slice.identity.category.name)
+                LabeledValue("Floor", "${uiState.slice.identity.floorMinutes} min")
+                LabeledValue("Push", "${uiState.slice.identity.pushMinutes} min")
+                uiState.slice.identity.statement.let {
+                    androidx.compose.material3.Text(
+                        text = it,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium
+                    )
+                }
+                TextButton(
+                    onClick = { onOpenIdentity(uiState.slice.identity.id) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    androidx.compose.material3.Text(text = "View Identity Details")
+                }
+            }
+        } else {
+            ScreenSection(title = "Identity") {
+                LabeledValue("Name", "Not created")
             }
         }
         ScreenSection(title = "Metrics") {
@@ -291,3 +326,12 @@ fun TodayScreen(
 
 private fun formatScore(value: Double?): String =
     if (value == null) "--" else String.format(Locale.US, "%.1f", value)
+
+private fun FeedbackMessage.messageTone(): MessageTone =
+    when (type) {
+        FeedbackType.BURNOUT_RISK,
+        FeedbackType.RECOVERY_WARNING,
+        FeedbackType.IDENTITY_CONFLICT -> MessageTone.WARNING
+        FeedbackType.PUSH_GUIDANCE,
+        FeedbackType.POSITIVE_STEADY_STATE -> MessageTone.INFO
+    }

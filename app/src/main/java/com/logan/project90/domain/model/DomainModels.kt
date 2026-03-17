@@ -49,13 +49,36 @@ data class IdentityAnalytics(
     val momentum: Double
 )
 
+enum class FeedbackType {
+    BURNOUT_RISK,
+    RECOVERY_WARNING,
+    IDENTITY_CONFLICT,
+    PUSH_GUIDANCE,
+    POSITIVE_STEADY_STATE
+}
+
+data class FeedbackMessage(
+    val type: FeedbackType,
+    val title: String,
+    val message: String,
+    val priority: Int
+)
+
 data class TodaySlice(
     val experiment: Experiment?,
     val identity: Identity?,
     val todayLog: DailyLog?,
-    val analytics: IdentityAnalytics?
+    val analytics: IdentityAnalytics?,
+    val feedback: List<FeedbackMessage> = emptyList()
 )
 
 data class SaveLogResult(
     val warning: String?
+)
+
+data class IdentityDetail(
+    val identity: Identity,
+    val analytics: IdentityAnalytics,
+    val recentLogs: List<DailyLog>,
+    val feedback: List<FeedbackMessage> = emptyList()
 )

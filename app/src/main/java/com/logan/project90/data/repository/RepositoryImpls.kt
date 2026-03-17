@@ -41,6 +41,12 @@ class IdentityRepositoryImpl(
     override suspend fun getFirstIdentityForExperiment(experimentId: Long): Identity? =
         dao.getFirstIdentityForExperiment(experimentId)?.toDomain()
 
+    override suspend fun getIdentityById(identityId: Long): Identity? =
+        dao.getIdentityById(identityId)?.toDomain()
+
+    override suspend fun getTotalFloorMinutesForExperiment(experimentId: Long): Int =
+        dao.getTotalFloorMinutesForExperiment(experimentId)
+
     override suspend fun createIdentity(identity: Identity): Long = dao.insert(identity.toEntity())
 
     override suspend fun categoryExists(experimentId: Long, category: IdentityCategory): Boolean =
@@ -59,6 +65,9 @@ class DailyLogRepositoryImpl(
 
     override suspend fun getLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog> =
         dao.getLogsInRange(identityId, startDate.toEpochDayLong(), endDate.toEpochDayLong()).map { it.toDomain() }
+
+    override suspend fun getRecentLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog> =
+        dao.getRecentLogsInRange(identityId, startDate.toEpochDayLong(), endDate.toEpochDayLong()).map { it.toDomain() }
 }
 
 private fun ExperimentEntity.toDomain() = Experiment(

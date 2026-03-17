@@ -15,6 +15,8 @@ import com.logan.project90.ui.experiment.CreateExperimentScreen
 import com.logan.project90.ui.experiment.CreateExperimentViewModel
 import com.logan.project90.ui.identity.CreateIdentityScreen
 import com.logan.project90.ui.identity.CreateIdentityViewModel
+import com.logan.project90.ui.identity.IdentityDetailScreen
+import com.logan.project90.ui.identity.IdentityDetailViewModel
 import com.logan.project90.ui.identity.PresetSelectionScreen
 import com.logan.project90.ui.timebudget.TimeBudgetScreen
 import com.logan.project90.ui.timebudget.TimeBudgetViewModel
@@ -130,8 +132,23 @@ fun AppNavGraph(
                 onMoodChanged = viewModel::updateMood,
                 onResistanceChanged = viewModel::updateResistance,
                 onReflectionChanged = viewModel::updateReflection,
-                onSave = viewModel::saveLog
+                onSave = viewModel::saveLog,
+                onOpenIdentity = { identityId ->
+                    navController.navigate(AppDestination.IdentityDetail.route(identityId))
+                }
             )
+        }
+        composable(
+            route = AppDestination.IdentityDetail.route,
+            arguments = listOf(
+                navArgument("identityId") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val identityId = backStackEntry.arguments?.getLong("identityId") ?: 0L
+            val viewModel: IdentityDetailViewModel =
+                viewModel(factory = IdentityDetailViewModel.factory(appContainer, identityId))
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            IdentityDetailScreen(uiState = uiState)
         }
     }
 }

@@ -6,7 +6,10 @@ import com.logan.project90.core.model.ResistanceLevel
 import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.domain.model.DailyLog
 import com.logan.project90.domain.model.Experiment
+import com.logan.project90.domain.model.FeedbackMessage
+import com.logan.project90.domain.model.FeedbackType
 import com.logan.project90.domain.model.Identity
+import com.logan.project90.domain.model.IdentityDetail
 import com.logan.project90.domain.model.IdentityAnalytics
 import com.logan.project90.domain.model.SaveLogResult
 import com.logan.project90.domain.model.TodaySlice
@@ -276,11 +279,122 @@ class CalculateIdentityAnalyticsUseCase(
     }
 }
 
+class GenerateFeedbackUseCase(
+    private val identityRepository: IdentityRepository,
+    private val settingsRepository: SettingsRepository
+) {
+    suspend operator fun invoke(
+        experiment: Experiment,
+        analytics: IdentityAnalytics
+    ): List<FeedbackMessage> {
+        val discretionaryTime = settingsRepository.discretionaryTimeMinutes.first()
+        val totalFloorMinutes = identityRepository.getTotalFloorMinutesForExperiment(experiment.id)
+        return selectFeedback(
+            buildCandidates(
+                analytics = analytics,
+                totalFloorMinutes = totalFloorMinutes,
+                discretionaryTime = discretionaryTime
+            )
+        )
+    }
+
+    private fun buildCandidates(
+        analytics: IdentityAnalytics,
+        totalFloorMinutes: Int,
+        discretionaryTime: Int?
+    ): List<FeedbackMessage> {
+        val candidates = mutableListOf<FeedbackMessage>()
+
+        if (analytics.burnoutTrigger) {
+            candidates += FeedbackMessage(
+                type = FeedbackType.BURNOUT_RISK,
+                title = "Burnout risk is elevated",
+                message = "Recent push volume is high for your current energy or resistance trend. Lean on the floor until the pattern feels steadier.",
+                priority = 1
+            )
+        }
+
+        if (!analytics.burnoutTrigger && analytics.recoveryBalance14 < 70.0) {
+            candidates += FeedbackMessage(
+                type = FeedbackType.RECOVERY_WARNING,
+                title = "Recovery looks compressed",
+                message = "Recent effort is asking for more recovery. Keep the floor stable and add push only when energy feels more reliable.",
+                priority = 2
+            )
+        }
+
+        if (discretionaryTime != null && totalFloorMinutes > discretionaryTime * 0.70) {
+            candidates += FeedbackMessage(
+                type = FeedbackType.IDENTITY_CONFLICT,
+                title = "Floor load is high",
+                message = "Your total floor targets are taking most of the available time. Simplify the floor before increasing intensity.",
+                priority = 3
+            )
+        }
+
+        if (!analytics.burnoutTrigger && analytics.recoveryBalance14 >= 70.0) {
+            when {
+                analytics.strength14 >= 70.0 && analytics.pushFreq14 < 20.0 -> {
+                    candidates += FeedbackMessage(
+                        type = FeedbackType.PUSH_GUIDANCE,
+                        title = "Push is optional here",
+                        message = "Floor consistency is strong. Increase push only if it feels sustainable.",
+                        priority = 4
+                    )
+                }
+                analytics.strength14 >= 50.0 &&
+                    analytics.strength7 + 10.0 < analytics.strength14 &&
+                    analytics.resistanceTrend5 > 0.0 -> {
+                    candidates += FeedbackMessage(
+                        type = FeedbackType.PUSH_GUIDANCE,
+                        title = "Recent effort looks less steady",
+                        message = "The last few days are carrying more friction than the two-week pattern. Re-center on the floor before adding more push.",
+                        priority = 4
+                    )
+                }
+            }
+        }
+
+        if (candidates.isEmpty() &&
+            analytics.strength14 >= 70.0 &&
+            analytics.recoveryBalance14 >= 80.0 &&
+            !analytics.burnoutTrigger
+        ) {
+            candidates += FeedbackMessage(
+                type = FeedbackType.POSITIVE_STEADY_STATE,
+                title = "Current pace looks steady",
+                message = "Your recent pattern looks sustainable. Keep the floor reliable and use push selectively.",
+                priority = 5
+            )
+        }
+
+        return candidates.sortedBy { it.priority }
+    }
+
+    private fun selectFeedback(candidates: List<FeedbackMessage>): List<FeedbackMessage> {
+        if (candidates.isEmpty()) return emptyList()
+        val primary = candidates.first()
+        val secondary = candidates
+            .drop(1)
+            .firstOrNull { candidate ->
+                when (primary.type) {
+                    FeedbackType.BURNOUT_RISK -> candidate.type == FeedbackType.IDENTITY_CONFLICT
+                    FeedbackType.RECOVERY_WARNING -> candidate.type == FeedbackType.IDENTITY_CONFLICT
+                    FeedbackType.IDENTITY_CONFLICT -> candidate.type == FeedbackType.RECOVERY_WARNING
+                    FeedbackType.PUSH_GUIDANCE -> false
+                    FeedbackType.POSITIVE_STEADY_STATE -> false
+                }
+            }
+        return listOfNotNull(primary, secondary)
+    }
+}
+
 class GetTodaySliceUseCase(
     private val experimentRepository: ExperimentRepository,
     private val identityRepository: IdentityRepository,
     private val dailyLogRepository: DailyLogRepository,
-    private val analyticsUseCase: CalculateIdentityAnalyticsUseCase
+    private val analyticsUseCase: CalculateIdentityAnalyticsUseCase,
+    private val feedbackUseCase: GenerateFeedbackUseCase
 ) {
     operator fun invoke(referenceDate: LocalDate): Flow<TodaySlice> {
         val experimentFlow = experimentRepository.observeFirstExperiment()
@@ -305,12 +419,51 @@ class GetTodaySliceUseCase(
             } else {
                 null
             }
+            val feedback = if (experiment != null && identity != null && analytics != null) {
+                feedbackUseCase(
+                    experiment = experiment,
+                    analytics = analytics
+                )
+            } else {
+                emptyList()
+            }
             TodaySlice(
                 experiment = experiment,
                 identity = identity,
                 todayLog = todayLog,
-                analytics = analytics
+                analytics = analytics,
+                feedback = feedback
             )
         }
+    }
+}
+
+class GetIdentityDetailUseCase(
+    private val experimentRepository: ExperimentRepository,
+    private val identityRepository: IdentityRepository,
+    private val dailyLogRepository: DailyLogRepository,
+    private val analyticsUseCase: CalculateIdentityAnalyticsUseCase,
+    private val feedbackUseCase: GenerateFeedbackUseCase
+) {
+    suspend operator fun invoke(identityId: Long, referenceDate: LocalDate): IdentityDetail? {
+        val identity = identityRepository.getIdentityById(identityId) ?: return null
+        val experiment = experimentRepository.getFirstExperiment() ?: return null
+        val todayLog = dailyLogRepository.getLogsInRange(identityId, referenceDate, referenceDate).firstOrNull()
+        val analytics = analyticsUseCase(identity, referenceDate, todayLog)
+        val recentLogs = dailyLogRepository.getRecentLogsInRange(
+            identityId = identityId,
+            startDate = referenceDate.minusDays(13),
+            endDate = referenceDate
+        )
+        val feedback = feedbackUseCase(
+            experiment = experiment,
+            analytics = analytics
+        )
+        return IdentityDetail(
+            identity = identity,
+            analytics = analytics,
+            recentLogs = recentLogs,
+            feedback = feedback
+        )
     }
 }

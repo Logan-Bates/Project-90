@@ -15,6 +15,8 @@ import com.logan.project90.domain.usecase.CalculateIdentityAnalyticsUseCase
 import com.logan.project90.domain.usecase.CompleteOnboardingUseCase
 import com.logan.project90.domain.usecase.CreateExperimentUseCase
 import com.logan.project90.domain.usecase.CreateIdentityUseCase
+import com.logan.project90.domain.usecase.GenerateFeedbackUseCase
+import com.logan.project90.domain.usecase.GetIdentityDetailUseCase
 import com.logan.project90.domain.usecase.GetTodaySliceUseCase
 import com.logan.project90.domain.usecase.LogIdentityDayUseCase
 
@@ -28,7 +30,9 @@ interface AppContainer {
     val createIdentityUseCase: CreateIdentityUseCase
     val logIdentityDayUseCase: LogIdentityDayUseCase
     val calculateIdentityAnalyticsUseCase: CalculateIdentityAnalyticsUseCase
+    val generateFeedbackUseCase: GenerateFeedbackUseCase
     val getTodaySliceUseCase: GetTodaySliceUseCase
+    val getIdentityDetailUseCase: GetIdentityDetailUseCase
 }
 
 class DefaultAppContainer(
@@ -50,10 +54,22 @@ class DefaultAppContainer(
     override val createIdentityUseCase = CreateIdentityUseCase(identityRepository, settingsRepository)
     override val logIdentityDayUseCase = LogIdentityDayUseCase(dailyLogRepository)
     override val calculateIdentityAnalyticsUseCase = CalculateIdentityAnalyticsUseCase(dailyLogRepository)
+    override val generateFeedbackUseCase = GenerateFeedbackUseCase(
+        identityRepository = identityRepository,
+        settingsRepository = settingsRepository
+    )
     override val getTodaySliceUseCase = GetTodaySliceUseCase(
         experimentRepository = experimentRepository,
         identityRepository = identityRepository,
         dailyLogRepository = dailyLogRepository,
-        analyticsUseCase = calculateIdentityAnalyticsUseCase
+        analyticsUseCase = calculateIdentityAnalyticsUseCase,
+        feedbackUseCase = generateFeedbackUseCase
+    )
+    override val getIdentityDetailUseCase = GetIdentityDetailUseCase(
+        experimentRepository = experimentRepository,
+        identityRepository = identityRepository,
+        dailyLogRepository = dailyLogRepository,
+        analyticsUseCase = calculateIdentityAnalyticsUseCase,
+        feedbackUseCase = generateFeedbackUseCase
     )
 }

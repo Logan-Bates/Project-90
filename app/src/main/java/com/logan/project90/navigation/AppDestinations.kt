@@ -10,5 +10,8 @@ sealed class AppDestination(val route: String) {
             if (presetId.isNullOrBlank()) "create_identity"
             else "create_identity?presetId=$presetId"
     }
+    data object IdentityDetail : AppDestination("identity_detail/{identityId}") {
+        fun route(identityId: Long): String = "identity_detail/$identityId"
+    }
     data object Today : AppDestination("today")
 }

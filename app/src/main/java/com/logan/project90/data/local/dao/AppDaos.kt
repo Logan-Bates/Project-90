@@ -29,8 +29,14 @@ interface IdentityDao {
     @Query("SELECT * FROM identities WHERE experimentId = :experimentId ORDER BY id ASC LIMIT 1")
     suspend fun getFirstIdentityForExperiment(experimentId: Long): IdentityEntity?
 
+    @Query("SELECT * FROM identities WHERE id = :identityId LIMIT 1")
+    suspend fun getIdentityById(identityId: Long): IdentityEntity?
+
     @Query("SELECT EXISTS(SELECT 1 FROM identities WHERE experimentId = :experimentId AND category = :category)")
     suspend fun categoryExists(experimentId: Long, category: String): Boolean
+
+    @Query("SELECT COALESCE(SUM(floorMinutes), 0) FROM identities WHERE experimentId = :experimentId")
+    suspend fun getTotalFloorMinutesForExperiment(experimentId: Long): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(identity: IdentityEntity): Long
@@ -56,6 +62,16 @@ interface DailyLogDao {
         """
     )
     suspend fun getLogsInRange(identityId: Long, startEpochDay: Long, endEpochDay: Long): List<DailyLogEntity>
+
+    @Query(
+        """
+        SELECT * FROM daily_logs
+        WHERE identityId = :identityId
+        AND logDateEpochDay BETWEEN :startEpochDay AND :endEpochDay
+        ORDER BY logDateEpochDay DESC
+        """
+    )
+    suspend fun getRecentLogsInRange(identityId: Long, startEpochDay: Long, endEpochDay: Long): List<DailyLogEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(log: DailyLogEntity)
