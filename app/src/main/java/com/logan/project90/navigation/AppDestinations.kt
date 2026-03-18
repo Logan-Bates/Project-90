@@ -5,6 +5,11 @@ sealed class AppDestination(val route: String) {
     data object TimeBudget : AppDestination("time_budget")
     data object CreateExperiment : AppDestination("create_experiment")
     data object PresetSelection : AppDestination("preset_selection")
+    data object ManageIdentitiesSetup : AppDestination("manage_identities_setup")
+    data object Main : AppDestination("main")
+    data object Today : AppDestination("today")
+    data object Analytics : AppDestination("analytics")
+    data object Experiment : AppDestination("experiment")
     data object CreateIdentity : AppDestination("create_identity?presetId={presetId}&identityId={identityId}") {
         fun route(presetId: String? = null, identityId: Long? = null): String {
             val parts = mutableListOf<String>()
@@ -13,9 +18,11 @@ sealed class AppDestination(val route: String) {
             return if (parts.isEmpty()) "create_identity" else "create_identity?${parts.joinToString("&")}"
         }
     }
-    data object ManageIdentities : AppDestination("manage_identities")
     data object IdentityDetail : AppDestination("identity_detail/{identityId}") {
         fun route(identityId: Long): String = "identity_detail/$identityId"
     }
-    data object Today : AppDestination("today")
+
+    companion object {
+        val topLevelDestinations = listOf(Analytics, Today, Experiment)
+    }
 }

@@ -77,6 +77,20 @@ data class TodaySlice(
     val identityCards: List<TodayIdentityCardModel> = emptyList()
 )
 
+data class AnalyticsIdentitySummary(
+    val identity: Identity,
+    val strength14: Double,
+    val momentum: Double
+)
+
+data class AnalyticsOverview(
+    val experiment: Experiment?,
+    val weightedMomentum: Double = 0.0,
+    val identityCount: Int = 0,
+    val totalFloorMinutes: Int = 0,
+    val identitySummaries: List<AnalyticsIdentitySummary> = emptyList()
+)
+
 data class SaveLogResult(
     val warning: String?
 )

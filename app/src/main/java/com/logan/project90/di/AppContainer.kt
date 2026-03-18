@@ -17,6 +17,7 @@ import com.logan.project90.domain.usecase.CreateExperimentUseCase
 import com.logan.project90.domain.usecase.CreateIdentityUseCase
 import com.logan.project90.domain.usecase.DeleteIdentityUseCase
 import com.logan.project90.domain.usecase.GenerateFeedbackUseCase
+import com.logan.project90.domain.usecase.GetAnalyticsOverviewUseCase
 import com.logan.project90.domain.usecase.GetEditableIdentityUseCase
 import com.logan.project90.domain.usecase.GetIdentityDetailUseCase
 import com.logan.project90.domain.usecase.GetTodaySliceUseCase
@@ -38,6 +39,7 @@ interface AppContainer {
     val calculateIdentityAnalyticsUseCase: CalculateIdentityAnalyticsUseCase
     val generateFeedbackUseCase: GenerateFeedbackUseCase
     val getTodaySliceUseCase: GetTodaySliceUseCase
+    val getAnalyticsOverviewUseCase: GetAnalyticsOverviewUseCase
     val getIdentityDetailUseCase: GetIdentityDetailUseCase
 }
 
@@ -77,6 +79,11 @@ class DefaultAppContainer(
         dailyLogRepository = dailyLogRepository,
         analyticsUseCase = calculateIdentityAnalyticsUseCase,
         feedbackUseCase = generateFeedbackUseCase
+    )
+    override val getAnalyticsOverviewUseCase = GetAnalyticsOverviewUseCase(
+        experimentRepository = experimentRepository,
+        identityRepository = identityRepository,
+        analyticsUseCase = calculateIdentityAnalyticsUseCase
     )
     override val getIdentityDetailUseCase = GetIdentityDetailUseCase(
         identityRepository = identityRepository,

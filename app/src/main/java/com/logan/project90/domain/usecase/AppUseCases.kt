@@ -4,6 +4,8 @@ import com.logan.project90.core.model.IdentityCategory
 import com.logan.project90.core.model.IdentityStatus
 import com.logan.project90.core.model.ResistanceLevel
 import com.logan.project90.core.util.ValidationMessages
+import com.logan.project90.domain.model.AnalyticsIdentitySummary
+import com.logan.project90.domain.model.AnalyticsOverview
 import com.logan.project90.domain.model.DailyLog
 import com.logan.project90.domain.model.Experiment
 import com.logan.project90.domain.model.FeedbackMessage
@@ -514,6 +516,47 @@ class GetTodaySliceUseCase(
                 experiment = experiment,
                 experimentFeedback = experimentFeedback,
                 identityCards = identityCards
+            )
+        }
+    }
+}
+
+class GetAnalyticsOverviewUseCase(
+    private val experimentRepository: ExperimentRepository,
+    private val identityRepository: IdentityRepository,
+    private val analyticsUseCase: CalculateIdentityAnalyticsUseCase
+) {
+    operator fun invoke(referenceDate: LocalDate): Flow<AnalyticsOverview> {
+        val experimentFlow = experimentRepository.observeFirstExperiment()
+        val identitiesFlow = experimentFlow.flatMapLatest { experiment ->
+            if (experiment == null) {
+                flowOf(emptyList())
+            } else {
+                identityRepository.observeIdentitiesForExperiment(experiment.id)
+            }
+        }
+
+        return combine(experimentFlow, identitiesFlow) { experiment, identities ->
+            val summaries = identities.map { identity ->
+                val analytics = analyticsUseCase(identity, referenceDate, todayLog = null)
+                AnalyticsIdentitySummary(
+                    identity = identity,
+                    strength14 = analytics.strength14,
+                    momentum = analytics.momentum
+                )
+            }
+            val totalWeight = identities.sumOf { it.importanceWeight }
+            val weightedMomentum = if (totalWeight == 0) {
+                0.0
+            } else {
+                summaries.sumOf { it.momentum * it.identity.importanceWeight } / totalWeight.toDouble()
+            }
+            AnalyticsOverview(
+                experiment = experiment,
+                weightedMomentum = weightedMomentum.coerceIn(0.0, 100.0),
+                identityCount = identities.size,
+                totalFloorMinutes = identities.sumOf { it.floorMinutes },
+                identitySummaries = summaries
             )
         }
     }

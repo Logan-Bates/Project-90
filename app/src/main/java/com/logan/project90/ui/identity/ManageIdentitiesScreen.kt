@@ -90,7 +90,10 @@ fun ManageIdentitiesScreen(
     onEditIdentity: (Long) -> Unit,
     onDeleteIdentity: (Long) -> Unit,
     onClearError: () -> Unit,
-    onContinue: () -> Unit
+    onContinue: (() -> Unit)?,
+    title: String = "Manage Identities",
+    subtitle: String = "Build the experiment with one to four identities, one per category.",
+    continueButtonText: String = "Continue to Today"
 ) {
     var pendingDelete by remember { mutableStateOf<Identity?>(null) }
     val deleteTarget = pendingDelete
@@ -108,8 +111,8 @@ fun ManageIdentitiesScreen(
 
     AppScreen(scrollable = true) {
         ScreenIntro(
-            title = "Manage Identities",
-            subtitle = "Build the experiment with one to four identities, one per category."
+            title = title,
+            subtitle = subtitle
         )
         ScreenSection(title = "Experiment") {
             LabeledValue("Experiment", uiState.experiment?.name ?: "Not created")
@@ -153,10 +156,12 @@ fun ManageIdentitiesScreen(
                 PrimaryButton(text = "Add Identity", onClick = onAddIdentity)
             }
         }
-        PrimaryButton(
-            text = "Continue to Today",
-            onClick = onContinue,
-            enabled = uiState.identities.isNotEmpty()
-        )
+        if (onContinue != null) {
+            PrimaryButton(
+                text = continueButtonText,
+                onClick = onContinue,
+                enabled = uiState.identities.isNotEmpty()
+            )
+        }
     }
 }
