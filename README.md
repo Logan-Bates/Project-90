@@ -72,6 +72,18 @@ Analytics are computed from stored data rather than persisted directly, ensuring
 
 ---
 
+## Documentation
+
+* [Product Requirements Document](docs/PRD_Project90.md)
+
+---
+
+## Product Thinking
+
+This project was designed from a structured product requirements document before implementation. The PRD captures the behavioral system, guardrails, analytics model, and planned product direction that shaped the current app: [Project 90 PRD](docs/PRD_Project90.md).
+
+---
+
 ## Current Status
 
 This project currently includes a working vertical slice:
