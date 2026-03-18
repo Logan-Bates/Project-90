@@ -77,10 +77,28 @@ data class TodaySlice(
     val identityCards: List<TodayIdentityCardModel> = emptyList()
 )
 
+enum class AnalyticsActivityState {
+    NO_LOG,
+    MISSED,
+    FLOOR,
+    PUSH
+}
+
+data class AnalyticsConsistencySummary(
+    val loggedDays: Int = 0,
+    val floorDays: Int = 0,
+    val pushDays: Int = 0,
+    val recoveryBalance14: Double = 0.0
+)
+
 data class AnalyticsIdentitySummary(
     val identity: Identity,
     val strength14: Double,
-    val momentum: Double
+    val momentum: Double,
+    val strengthTrend: List<Double> = emptyList(),
+    val momentumTrend: List<Double> = emptyList(),
+    val consistencySummary: AnalyticsConsistencySummary = AnalyticsConsistencySummary(),
+    val recentActivity: List<AnalyticsActivityState> = emptyList()
 )
 
 data class AnalyticsOverview(

@@ -4,6 +4,8 @@ import com.logan.project90.core.model.IdentityCategory
 import com.logan.project90.core.model.IdentityStatus
 import com.logan.project90.core.model.ResistanceLevel
 import com.logan.project90.core.util.ValidationMessages
+import com.logan.project90.domain.model.AnalyticsActivityState
+import com.logan.project90.domain.model.AnalyticsConsistencySummary
 import com.logan.project90.domain.model.AnalyticsIdentitySummary
 import com.logan.project90.domain.model.AnalyticsOverview
 import com.logan.project90.domain.model.DailyLog
@@ -524,6 +526,7 @@ class GetTodaySliceUseCase(
 class GetAnalyticsOverviewUseCase(
     private val experimentRepository: ExperimentRepository,
     private val identityRepository: IdentityRepository,
+    private val dailyLogRepository: DailyLogRepository,
     private val analyticsUseCase: CalculateIdentityAnalyticsUseCase
 ) {
     operator fun invoke(referenceDate: LocalDate): Flow<AnalyticsOverview> {
@@ -535,14 +538,19 @@ class GetAnalyticsOverviewUseCase(
                 identityRepository.observeIdentitiesForExperiment(experiment.id)
             }
         }
+        val todayLogsFlow = identitiesFlow.flatMapLatest { identities ->
+            if (identities.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                dailyLogRepository.observeLogsForDate(identities.map { it.id }, referenceDate)
+            }
+        }
 
-        return combine(experimentFlow, identitiesFlow) { experiment, identities ->
+        return combine(experimentFlow, identitiesFlow, todayLogsFlow) { experiment, identities, _ ->
             val summaries = identities.map { identity ->
-                val analytics = analyticsUseCase(identity, referenceDate, todayLog = null)
-                AnalyticsIdentitySummary(
+                buildIdentitySummary(
                     identity = identity,
-                    strength14 = analytics.strength14,
-                    momentum = analytics.momentum
+                    referenceDate = referenceDate
                 )
             }
             val totalWeight = identities.sumOf { it.importanceWeight }
@@ -559,6 +567,60 @@ class GetAnalyticsOverviewUseCase(
                 identitySummaries = summaries
             )
         }
+    }
+
+    private suspend fun buildIdentitySummary(
+        identity: Identity,
+        referenceDate: LocalDate
+    ): AnalyticsIdentitySummary {
+        val logs14 = dailyLogRepository.getLogsInRange(
+            identityId = identity.id,
+            startDate = referenceDate.minusDays(13),
+            endDate = referenceDate
+        )
+        val logsByDate = logs14.associateBy { it.logDate }
+        val activeDates = boundedWindowDates(
+            createdDate = identity.createdDate,
+            referenceDate = referenceDate,
+            lookbackDays = 14
+        )
+        val currentAnalytics = analyticsUseCase(
+            identity = identity,
+            referenceDate = referenceDate,
+            todayLog = logsByDate[referenceDate]
+        )
+        val trendSnapshots = activeDates.map { day ->
+            analyticsUseCase(
+                identity = identity,
+                referenceDate = day,
+                todayLog = logsByDate[day]
+            )
+        }
+        return AnalyticsIdentitySummary(
+            identity = identity,
+            strength14 = currentAnalytics.strength14,
+            momentum = currentAnalytics.momentum,
+            strengthTrend = trendSnapshots.map { it.strength14 },
+            momentumTrend = trendSnapshots.map { it.momentum },
+            consistencySummary = AnalyticsConsistencySummary(
+                loggedDays = logs14.size,
+                floorDays = logs14.count { it.status == IdentityStatus.FLOOR_PROTECTED },
+                pushDays = logs14.count { it.status == IdentityStatus.PUSH_EXECUTED },
+                recoveryBalance14 = currentAnalytics.recoveryBalance14
+            ),
+            recentActivity = boundedWindowDates(
+                createdDate = identity.createdDate,
+                referenceDate = referenceDate,
+                lookbackDays = 7
+            ).map { day ->
+                when (logsByDate[day]?.status) {
+                    null -> AnalyticsActivityState.NO_LOG
+                    IdentityStatus.MISSED -> AnalyticsActivityState.MISSED
+                    IdentityStatus.FLOOR_PROTECTED -> AnalyticsActivityState.FLOOR
+                    IdentityStatus.PUSH_EXECUTED -> AnalyticsActivityState.PUSH
+                }
+            }
+        )
     }
 }
 
@@ -603,4 +665,17 @@ private fun validateIdentityFields(
     pushMinutes > floorMinutes * 3 -> ValidationMessages.pushMaxThreeTimesFloor
     importanceWeight !in 1..3 -> ValidationMessages.range1To3
     else -> null
+}
+
+private fun boundedWindowDates(
+    createdDate: LocalDate,
+    referenceDate: LocalDate,
+    lookbackDays: Int
+): List<LocalDate> {
+    val start = max(createdDate.toEpochDay(), referenceDate.minusDays(lookbackDays.toLong() - 1).toEpochDay())
+    if (start > referenceDate.toEpochDay()) return emptyList()
+    val startDate = LocalDate.ofEpochDay(start)
+    return generateSequence(startDate) { date ->
+        date.plusDays(1).takeIf { !it.isAfter(referenceDate) }
+    }.toList()
 }

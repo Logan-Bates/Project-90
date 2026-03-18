@@ -17,6 +17,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.logan.project90.core.model.IdentityCategory
+import com.logan.project90.core.model.displayName
 import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.core.util.todayLocalDate
 import com.logan.project90.di.AppContainer
@@ -251,7 +252,7 @@ fun CreateIdentityScreen(
             if (uiState.availableCategories.size > 1 && uiState.category != null) {
                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
                     OutlinedTextField(
-                        value = uiState.category.name,
+                        value = uiState.category.displayName(),
                         onValueChange = {},
                         readOnly = true,
                         label = { androidx.compose.material3.Text("Category") },
@@ -264,7 +265,7 @@ fun CreateIdentityScreen(
                     ) {
                         uiState.availableCategories.forEach { category ->
                             DropdownMenuItem(
-                                text = { androidx.compose.material3.Text(category.name) },
+                                text = { androidx.compose.material3.Text(category.displayName()) },
                                 onClick = {
                                     onCategoryChanged(category)
                                     expanded = false
@@ -275,7 +276,7 @@ fun CreateIdentityScreen(
                 }
             } else {
                 OutlinedTextField(
-                    value = uiState.category?.name ?: "--",
+                    value = uiState.category?.displayName() ?: "--",
                     onValueChange = {},
                     readOnly = true,
                     label = { androidx.compose.material3.Text("Category") },
@@ -287,7 +288,7 @@ fun CreateIdentityScreen(
         ScreenSection(title = "Daily Targets") {
             NumberField(value = uiState.floorMinutes, onValueChange = onFloorChanged, label = "Floor minutes")
             NumberField(value = uiState.pushMinutes, onValueChange = onPushChanged, label = "Push minutes")
-            NumberField(value = uiState.importanceWeight, onValueChange = onWeightChanged, label = "Importance (1-3)")
+            NumberField(value = uiState.importanceWeight, onValueChange = onWeightChanged, label = "Priority (1-3)")
             uiState.warning?.let { InlineMessage(text = it, tone = MessageTone.WARNING) }
             (uiState.error ?: uiState.inputError)?.let { InlineMessage(text = it, tone = MessageTone.ERROR) }
             PrimaryButton(

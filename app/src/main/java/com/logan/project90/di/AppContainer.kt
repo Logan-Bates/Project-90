@@ -83,6 +83,7 @@ class DefaultAppContainer(
     override val getAnalyticsOverviewUseCase = GetAnalyticsOverviewUseCase(
         experimentRepository = experimentRepository,
         identityRepository = identityRepository,
+        dailyLogRepository = dailyLogRepository,
         analyticsUseCase = calculateIdentityAnalyticsUseCase
     )
     override val getIdentityDetailUseCase = GetIdentityDetailUseCase(

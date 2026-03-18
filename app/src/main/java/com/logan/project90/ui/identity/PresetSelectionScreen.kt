@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.unit.dp
 import com.logan.project90.core.model.IdentityCategory
+import com.logan.project90.core.model.displayName
 import com.logan.project90.core.util.ValidationMessages
 import com.logan.project90.di.AppContainer
 import com.logan.project90.domain.preset.IdentityPreset
@@ -75,7 +76,7 @@ fun PresetSelectionScreen(
             subtitle = "Pick a preset to prefill the identity form, or create a custom identity."
         )
         if (uiState.canAddMore) {
-            PrimaryButton(text = "Create Custom", onClick = onCreateCustom)
+            PrimaryButton(text = "Create Your Own", onClick = onCreateCustom)
         }
         uiState.maxMessage?.let {
             InlineMessage(text = it, tone = MessageTone.WARNING)
@@ -102,7 +103,7 @@ private fun PresetCard(
             text = preset.name,
             style = androidx.compose.material3.MaterialTheme.typography.titleMedium
         )
-        SupportText(text = preset.category.name.lowercase().replaceFirstChar { it.uppercase() })
+        SupportText(text = preset.category.displayName())
         androidx.compose.material3.Text(
             text = preset.description,
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium

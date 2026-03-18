@@ -11,10 +11,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.util.Locale
 
 data class AnalyticsUiState(
     val overview: AnalyticsOverview = AnalyticsOverview(experiment = null)
-)
+) {
+    val weightedMomentumDisplay: String
+        get() = String.format(Locale.US, "%.1f", overview.weightedMomentum)
+}
 
 class AnalyticsViewModel(appContainer: AppContainer) : ViewModel() {
     val uiState: StateFlow<AnalyticsUiState> =

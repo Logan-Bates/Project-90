@@ -204,16 +204,16 @@ fun TodayScreen(
             title = "Today",
             subtitle = "Review the experiment, scan feedback, and log each identity from one dashboard."
         )
-        ScreenSection(title = "Experiment") {
+        ScreenSection(title = "Current Experiment") {
             LabeledValue("Date", formatDisplayDate(todayLocalDate()))
-            LabeledValue("Experiment", uiState.slice.experiment?.name ?: "Not created")
-            LabeledValue("Identities", uiState.slice.identityCards.size.toString())
+            LabeledValue("Current Experiment", uiState.slice.experiment?.name ?: "Not set up yet")
+            LabeledValue("Identity Overview", uiState.slice.identityCards.size.toString())
             androidx.compose.material3.TextButton(onClick = onManageIdentities) {
-                androidx.compose.material3.Text("Manage Identities")
+                androidx.compose.material3.Text("Edit Identities")
             }
         }
         uiState.slice.experimentFeedback?.let { feedback ->
-            ScreenSection(title = "Feedback") {
+            ScreenSection(title = "What the pattern suggests") {
                 androidx.compose.material3.Text(
                     text = feedback.title,
                     style = androidx.compose.material3.MaterialTheme.typography.titleSmall
@@ -222,10 +222,10 @@ fun TodayScreen(
             }
         }
         if (uiState.slice.identityCards.isEmpty()) {
-            ScreenSection(title = "Identities") {
+            ScreenSection(title = "Identity Overview") {
                 SupportText(text = "Add an identity to start logging daily progress.")
                 androidx.compose.material3.TextButton(onClick = onManageIdentities) {
-                    androidx.compose.material3.Text("Manage Identities")
+                    androidx.compose.material3.Text("Edit Identities")
                 }
             }
         } else {

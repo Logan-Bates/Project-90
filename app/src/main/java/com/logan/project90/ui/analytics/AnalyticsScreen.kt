@@ -1,16 +1,11 @@
 package com.logan.project90.ui.analytics
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import com.logan.project90.ui.components.AppCard
 import com.logan.project90.ui.components.AppScreen
 import com.logan.project90.ui.components.LabeledValue
 import com.logan.project90.ui.components.ScreenIntro
 import com.logan.project90.ui.components.ScreenSection
 import com.logan.project90.ui.components.SupportText
-import java.util.Locale
 
 @Composable
 fun AnalyticsScreen(
@@ -22,36 +17,22 @@ fun AnalyticsScreen(
             title = "Analytics",
             subtitle = "Scan experiment momentum and compare each identity at a glance."
         )
-        ScreenSection(title = "Experiment") {
-            LabeledValue("Experiment", uiState.overview.experiment?.name ?: "Not created")
-            LabeledValue("Momentum", formatScore(uiState.overview.weightedMomentum))
-            LabeledValue("Identities", uiState.overview.identityCount.toString())
+        ScreenSection(title = "Current Experiment") {
+            LabeledValue("Current Experiment", uiState.overview.experiment?.name ?: "Not set up yet")
+            LabeledValue("Experiment Momentum", uiState.weightedMomentumDisplay)
+            LabeledValue("Identity Overview", uiState.overview.identityCount.toString())
             if (uiState.overview.totalFloorMinutes > 0) {
-                LabeledValue("Total Floor", "${uiState.overview.totalFloorMinutes} min")
+                LabeledValue("Daily Floor Load", "${uiState.overview.totalFloorMinutes} min")
             }
         }
-        ScreenSection(title = "Identities") {
+        ScreenSection(title = "Identity Overview") {
             if (uiState.overview.identitySummaries.isEmpty()) {
-                SupportText(text = "No identities yet. Add one in Experiment to start building metrics.")
+                SupportText(text = "Add an identity in Experiment to start tracking progress.")
             } else {
                 uiState.overview.identitySummaries.forEach { summary ->
-                    AppCard {
-                        Text(
-                            text = summary.identity.name,
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        LabeledValue("Category", summary.identity.category.name)
-                        LabeledValue("Strength14", formatScore(summary.strength14))
-                        LabeledValue("Momentum", formatScore(summary.momentum))
-                        TextButton(onClick = { onOpenIdentity(summary.identity.id) }) {
-                            Text("View Identity Details")
-                        }
-                    }
+                    AnalyticsIdentityCard(summary = summary, onOpenIdentity = onOpenIdentity)
                 }
             }
         }
     }
 }
-
-private fun formatScore(value: Double): String =
-    String.format(Locale.US, "%.1f", value)

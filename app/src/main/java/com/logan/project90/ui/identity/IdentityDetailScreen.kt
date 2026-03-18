@@ -1,6 +1,7 @@
 package com.logan.project90.ui.identity
 
 import androidx.compose.runtime.Composable
+import com.logan.project90.core.model.displayName
 import com.logan.project90.domain.model.DailyLog
 import com.logan.project90.domain.model.FeedbackMessage
 import com.logan.project90.domain.model.FeedbackType
@@ -27,23 +28,23 @@ fun IdentityDetailScreen(
         }
         uiState.detail?.let { detail ->
             ScreenSection(title = "Identity") {
-                LabeledValue("Category", detail.identity.category.name)
+                LabeledValue("Category", detail.identity.category.displayName())
                 SupportText(text = detail.identity.statement)
             }
             ScreenSection(title = "Targets") {
                 LabeledValue("Floor", "${detail.identity.floorMinutes} min")
                 LabeledValue("Push", "${detail.identity.pushMinutes} min")
-                LabeledValue("Weight", detail.identity.importanceWeight.toString())
+                LabeledValue("Priority", detail.identity.importanceWeight.toString())
             }
             ScreenSection(title = "Analytics") {
-                LabeledValue("Strength14", formatScore(detail.analytics.strength14))
-                LabeledValue("Strength7", formatScore(detail.analytics.strength7))
-                LabeledValue("PushFreq14", formatScore(detail.analytics.pushFreq14))
-                LabeledValue("RecoveryBalance14", formatScore(detail.analytics.recoveryBalance14))
-                LabeledValue("Momentum", formatScore(detail.analytics.momentum))
+                LabeledValue("Consistency Score", formatScore(detail.analytics.strength14))
+                LabeledValue("Weekly Consistency", formatScore(detail.analytics.strength7))
+                LabeledValue("Push Rate", formatScore(detail.analytics.pushFreq14))
+                LabeledValue("Recovery Balance", formatScore(detail.analytics.recoveryBalance14))
+                LabeledValue("Momentum Score", formatScore(detail.analytics.momentum))
             }
             if (detail.feedback.isNotEmpty()) {
-                ScreenSection(title = "Feedback") {
+                ScreenSection(title = "What the pattern suggests") {
                     detail.feedback.forEach { feedback ->
                         androidx.compose.material3.Text(
                             text = feedback.title,
@@ -56,9 +57,9 @@ fun IdentityDetailScreen(
                     }
                 }
             }
-            ScreenSection(title = "Recent Activity") {
+            ScreenSection(title = "Last 7 Days") {
                 if (detail.recentLogs.isEmpty()) {
-                    SupportText(text = "No logs recorded yet.")
+                    SupportText(text = "No activity recorded yet.")
                 } else {
                     detail.recentLogs.forEach { log ->
                         RecentLogRow(log = log)
@@ -76,10 +77,10 @@ private fun RecentLogRow(log: DailyLog) {
             text = log.logDate.toString(),
             style = androidx.compose.material3.MaterialTheme.typography.titleSmall
         )
-        LabeledValue("Status", log.status.name)
+        LabeledValue("Status", log.status.displayName())
         LabeledValue("Effort", "${log.effortMinutes} min")
         LabeledValue("Energy / Mood", "${log.energy} / ${log.mood}")
-        LabeledValue("Resistance", log.resistance.name)
+        LabeledValue("Resistance", log.resistance.displayName())
         if (log.reflection.isNotBlank()) {
             SupportText(text = log.reflection)
         }

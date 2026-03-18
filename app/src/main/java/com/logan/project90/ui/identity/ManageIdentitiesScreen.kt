@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.logan.project90.core.util.ValidationMessages
+import com.logan.project90.core.model.displayName
 import com.logan.project90.di.AppContainer
 import com.logan.project90.domain.model.Experiment
 import com.logan.project90.domain.model.Identity
@@ -91,7 +92,7 @@ fun ManageIdentitiesScreen(
     onDeleteIdentity: (Long) -> Unit,
     onClearError: () -> Unit,
     onContinue: (() -> Unit)?,
-    title: String = "Manage Identities",
+    title: String = "Edit Identities",
     subtitle: String = "Build the experiment with one to four identities, one per category.",
     continueButtonText: String = "Continue to Today"
 ) {
@@ -114,18 +115,18 @@ fun ManageIdentitiesScreen(
             title = title,
             subtitle = subtitle
         )
-        ScreenSection(title = "Experiment") {
-            LabeledValue("Experiment", uiState.experiment?.name ?: "Not created")
-            LabeledValue("Identities", "${uiState.identities.size} / 4")
+        ScreenSection(title = "Current Experiment") {
+            LabeledValue("Current Experiment", uiState.experiment?.name ?: "Not set up yet")
+            LabeledValue("Identity Overview", "${uiState.identities.size} / 4")
         }
-        ScreenSection(title = "Current Identities") {
+        ScreenSection(title = "Identity Overview") {
             if (uiState.identities.isEmpty()) {
                 SupportText(text = "No identities yet. Add one to start the daily loop.")
             } else {
                 uiState.identities.forEach { identity ->
                     AppCard {
                         LabeledValue("Name", identity.name)
-                        LabeledValue("Category", identity.category.name)
+                        LabeledValue("Category", identity.category.displayName())
                         LabeledValue("Floor", "${identity.floorMinutes} min")
                         LabeledValue("Push", "${identity.pushMinutes} min")
                         androidx.compose.material3.TextButton(

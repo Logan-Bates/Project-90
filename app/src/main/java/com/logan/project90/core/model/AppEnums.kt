@@ -20,3 +20,16 @@ enum class ResistanceLevel(val score: Int) {
     MODERATE(2),
     HIGH(3)
 }
+
+fun IdentityCategory.displayName(): String =
+    name.lowercase().replaceFirstChar { it.uppercase() }
+
+fun IdentityStatus.displayName(): String =
+    when (this) {
+        IdentityStatus.MISSED -> "Not Completed"
+        IdentityStatus.FLOOR_PROTECTED -> "Floor Protected"
+        IdentityStatus.PUSH_EXECUTED -> "Push Executed"
+    }
+
+fun ResistanceLevel.displayName(): String =
+    name.lowercase().replaceFirstChar { it.uppercase() }

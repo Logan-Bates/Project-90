@@ -14,6 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.logan.project90.core.model.displayName
 import com.logan.project90.core.model.IdentityStatus
 import com.logan.project90.core.model.ResistanceLevel
 import com.logan.project90.domain.model.FeedbackMessage
@@ -53,15 +54,15 @@ fun TodayIdentityCard(
             text = card.identity.name,
             style = androidx.compose.material3.MaterialTheme.typography.titleMedium
         )
-        LabeledValue("Category", card.identity.category.name)
+        LabeledValue("Category", card.identity.category.displayName())
         if (card.todayLog == null) {
             SupportText(text = "Not logged today.")
         } else {
-            LabeledValue("Saved status", card.todayLog.status.name)
+            LabeledValue("Saved status", card.todayLog.status.displayName())
             LabeledValue("Saved effort", "${card.todayLog.effortMinutes} min")
         }
-        LabeledValue("Strength14", formatScore(card.analytics.strength14))
-        LabeledValue("Momentum", formatScore(card.analytics.momentum))
+        LabeledValue("Consistency Score", formatScore(card.analytics.strength14))
+        LabeledValue("Momentum Score", formatScore(card.analytics.momentum))
         card.feedback?.let {
             InlineMessage(text = it.message, tone = it.messageTone())
         }
@@ -69,10 +70,10 @@ fun TodayIdentityCard(
             onClick = { onOpenIdentity(card.identity.id) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            androidx.compose.material3.Text(text = "View Identity Details")
+            androidx.compose.material3.Text(text = "See Details")
         }
         PrimaryButton(
-            text = if (isEditorOpen) "Hide Editor" else if (card.todayLog == null) "Log Today" else "Edit Today",
+            text = if (isEditorOpen) "Hide Editor" else if (card.todayLog == null) "Record Today" else "Update Today",
             onClick = {
                 if (isEditorOpen) onCloseEditor() else onOpenEditor(card.identity.id)
             }
@@ -85,7 +86,7 @@ fun TodayIdentityCard(
             )
             ExposedDropdownMenuBox(expanded = statusExpanded, onExpandedChange = { statusExpanded = !statusExpanded }) {
                 OutlinedTextField(
-                    value = editorState.status.name,
+                    value = editorState.status.displayName(),
                     onValueChange = {},
                     readOnly = true,
                     label = { androidx.compose.material3.Text("Status") },
@@ -95,7 +96,7 @@ fun TodayIdentityCard(
                 DropdownMenu(expanded = statusExpanded, onDismissRequest = { statusExpanded = false }) {
                     IdentityStatus.entries.forEach { status ->
                         DropdownMenuItem(
-                            text = { androidx.compose.material3.Text(status.name) },
+                            text = { androidx.compose.material3.Text(status.displayName()) },
                             onClick = {
                                 onStatusChanged(status)
                                 statusExpanded = false
@@ -111,7 +112,7 @@ fun TodayIdentityCard(
                 onExpandedChange = { resistanceExpanded = !resistanceExpanded }
             ) {
                 OutlinedTextField(
-                    value = editorState.resistance.name,
+                    value = editorState.resistance.displayName(),
                     onValueChange = {},
                     readOnly = true,
                     label = { androidx.compose.material3.Text("Resistance") },
@@ -121,7 +122,7 @@ fun TodayIdentityCard(
                 DropdownMenu(expanded = resistanceExpanded, onDismissRequest = { resistanceExpanded = false }) {
                     ResistanceLevel.entries.forEach { resistance ->
                         DropdownMenuItem(
-                            text = { androidx.compose.material3.Text(resistance.name) },
+                            text = { androidx.compose.material3.Text(resistance.displayName()) },
                             onClick = {
                                 onResistanceChanged(resistance)
                                 resistanceExpanded = false
@@ -140,7 +141,7 @@ fun TodayIdentityCard(
             editorState.saveWarning?.let { InlineMessage(text = it, tone = MessageTone.WARNING) }
             editorState.saveError?.let { InlineMessage(text = it, tone = MessageTone.ERROR) }
             PrimaryButton(
-                text = if (card.todayLog == null) "Save today" else "Update today",
+                text = if (card.todayLog == null) "Save Today" else "Update Today",
                 onClick = onSave,
                 enabled = editorState.canSave
             )
