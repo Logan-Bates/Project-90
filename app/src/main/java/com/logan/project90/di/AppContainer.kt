@@ -15,10 +15,13 @@ import com.logan.project90.domain.usecase.CalculateIdentityAnalyticsUseCase
 import com.logan.project90.domain.usecase.CompleteOnboardingUseCase
 import com.logan.project90.domain.usecase.CreateExperimentUseCase
 import com.logan.project90.domain.usecase.CreateIdentityUseCase
+import com.logan.project90.domain.usecase.DeleteIdentityUseCase
 import com.logan.project90.domain.usecase.GenerateFeedbackUseCase
+import com.logan.project90.domain.usecase.GetEditableIdentityUseCase
 import com.logan.project90.domain.usecase.GetIdentityDetailUseCase
 import com.logan.project90.domain.usecase.GetTodaySliceUseCase
 import com.logan.project90.domain.usecase.LogIdentityDayUseCase
+import com.logan.project90.domain.usecase.UpdateIdentityUseCase
 
 interface AppContainer {
     val settingsRepository: SettingsRepository
@@ -28,6 +31,9 @@ interface AppContainer {
     val completeOnboardingUseCase: CompleteOnboardingUseCase
     val createExperimentUseCase: CreateExperimentUseCase
     val createIdentityUseCase: CreateIdentityUseCase
+    val updateIdentityUseCase: UpdateIdentityUseCase
+    val deleteIdentityUseCase: DeleteIdentityUseCase
+    val getEditableIdentityUseCase: GetEditableIdentityUseCase
     val logIdentityDayUseCase: LogIdentityDayUseCase
     val calculateIdentityAnalyticsUseCase: CalculateIdentityAnalyticsUseCase
     val generateFeedbackUseCase: GenerateFeedbackUseCase
@@ -46,12 +52,19 @@ class DefaultAppContainer(
 
     override val settingsRepository: SettingsRepository = SettingsDataStore(context)
     override val experimentRepository: ExperimentRepository = ExperimentRepositoryImpl(database.experimentDao())
-    override val identityRepository: IdentityRepository = IdentityRepositoryImpl(database.identityDao())
+    override val identityRepository: IdentityRepository = IdentityRepositoryImpl(
+        dao = database.identityDao(),
+        dailyLogDao = database.dailyLogDao(),
+        database = database
+    )
     override val dailyLogRepository: DailyLogRepository = DailyLogRepositoryImpl(database.dailyLogDao())
 
     override val completeOnboardingUseCase = CompleteOnboardingUseCase(settingsRepository)
     override val createExperimentUseCase = CreateExperimentUseCase(experimentRepository)
     override val createIdentityUseCase = CreateIdentityUseCase(identityRepository, settingsRepository)
+    override val updateIdentityUseCase = UpdateIdentityUseCase(identityRepository, settingsRepository)
+    override val deleteIdentityUseCase = DeleteIdentityUseCase(identityRepository)
+    override val getEditableIdentityUseCase = GetEditableIdentityUseCase(identityRepository, experimentRepository)
     override val logIdentityDayUseCase = LogIdentityDayUseCase(dailyLogRepository)
     override val calculateIdentityAnalyticsUseCase = CalculateIdentityAnalyticsUseCase(dailyLogRepository)
     override val generateFeedbackUseCase = GenerateFeedbackUseCase(
@@ -66,7 +79,6 @@ class DefaultAppContainer(
         feedbackUseCase = generateFeedbackUseCase
     )
     override val getIdentityDetailUseCase = GetIdentityDetailUseCase(
-        experimentRepository = experimentRepository,
         identityRepository = identityRepository,
         dailyLogRepository = dailyLogRepository,
         analyticsUseCase = calculateIdentityAnalyticsUseCase,

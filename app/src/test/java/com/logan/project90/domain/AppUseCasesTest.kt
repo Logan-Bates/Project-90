@@ -8,6 +8,7 @@ import com.logan.project90.domain.model.Experiment
 import com.logan.project90.domain.model.FeedbackType
 import com.logan.project90.domain.model.Identity
 import com.logan.project90.domain.model.IdentityAnalytics
+import com.logan.project90.domain.model.TodayIdentityCardModel
 import com.logan.project90.domain.repository.DailyLogRepository
 import com.logan.project90.domain.repository.IdentityRepository
 import com.logan.project90.domain.repository.SettingsRepository
@@ -63,7 +64,7 @@ class AppUseCasesTest {
 
     @Test
     fun feedback_prioritizesBurnoutAndSuppressesPushGuidance() {
-        val feedback = runFeedback(
+        val feedback = runExperimentFeedback(
             analytics = analytics(
                 strength14 = 78.0,
                 strength7 = 72.0,
@@ -77,14 +78,12 @@ class AppUseCasesTest {
             discretionaryTimeMinutes = 160
         )
 
-        assertEquals(2, feedback.size)
-        assertEquals(FeedbackType.BURNOUT_RISK, feedback.first().type)
-        assertEquals(FeedbackType.IDENTITY_CONFLICT, feedback.last().type)
+        assertEquals(FeedbackType.BURNOUT_RISK, feedback?.type)
     }
 
     @Test
     fun feedback_usesNeutralPushGuidanceWhenFloorIsStrong() {
-        val feedback = runFeedback(
+        val feedback = runIdentityFeedback(
             analytics = analytics(
                 strength14 = 82.0,
                 strength7 = 80.0,
@@ -95,17 +94,16 @@ class AppUseCasesTest {
             discretionaryTimeMinutes = 180
         )
 
-        assertEquals(1, feedback.size)
-        assertEquals(FeedbackType.PUSH_GUIDANCE, feedback.first().type)
+        assertEquals(FeedbackType.PUSH_GUIDANCE, feedback?.type)
         assertEquals(
             "Floor consistency is strong. Increase push only if it feels sustainable.",
-            feedback.first().message
+            feedback?.message
         )
     }
 
     @Test
     fun feedback_returnsPositiveStateWhenNoWarningsApply() {
-        val feedback = runFeedback(
+        val feedback = runIdentityFeedback(
             analytics = analytics(
                 strength14 = 84.0,
                 strength7 = 78.0,
@@ -116,11 +114,10 @@ class AppUseCasesTest {
             discretionaryTimeMinutes = 180
         )
 
-        assertEquals(1, feedback.size)
-        assertEquals(FeedbackType.POSITIVE_STEADY_STATE, feedback.first().type)
+        assertEquals(FeedbackType.POSITIVE_STEADY_STATE, feedback?.type)
     }
 
-    private fun runFeedback(
+    private fun runExperimentFeedback(
         analytics: IdentityAnalytics,
         totalFloorMinutes: Int,
         discretionaryTimeMinutes: Int
@@ -129,7 +126,7 @@ class AppUseCasesTest {
             identityRepository = FakeIdentityRepository(totalFloorMinutes),
             settingsRepository = FakeSettingsRepository(discretionaryTimeMinutes)
         )
-        useCase(
+        useCase.experimentFeedback(
             experiment = Experiment(
                 id = 1,
                 name = "Project 90",
@@ -137,8 +134,37 @@ class AppUseCasesTest {
                 durationDays = 90,
                 endDate = LocalDate.of(2026, 5, 29)
             ),
-            analytics = analytics
+            identityCards = listOf(
+                TodayIdentityCardModel(
+                    identity = Identity(
+                        id = 1,
+                        experimentId = 1,
+                        name = "Deep Work",
+                        statement = "I protect focused time every day.",
+                        category = IdentityCategory.MIND,
+                        floorMinutes = 45,
+                        pushMinutes = 90,
+                        importanceWeight = 2,
+                        createdDate = LocalDate.of(2026, 3, 1)
+                    ),
+                    todayLog = null,
+                    analytics = analytics,
+                    feedback = null
+                )
+            )
         )
+    }
+
+    private fun runIdentityFeedback(
+        analytics: IdentityAnalytics,
+        totalFloorMinutes: Int,
+        discretionaryTimeMinutes: Int
+    ) = kotlinx.coroutines.runBlocking {
+        val useCase = GenerateFeedbackUseCase(
+            identityRepository = FakeIdentityRepository(totalFloorMinutes),
+            settingsRepository = FakeSettingsRepository(discretionaryTimeMinutes)
+        )
+        useCase.identityFeedback(analytics)
     }
 
     private fun analytics(
@@ -164,21 +190,28 @@ class AppUseCasesTest {
 
 private class FakeDailyLogRepository : DailyLogRepository {
     override fun observeLog(identityId: Long, date: LocalDate): Flow<DailyLog?> = emptyFlow()
+    override fun observeLogsForDate(identityIds: List<Long>, date: LocalDate): Flow<List<DailyLog>> = emptyFlow()
     override suspend fun upsertLog(log: DailyLog) = Unit
     override suspend fun getLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog> =
         emptyList()
     override suspend fun getRecentLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog> =
         emptyList()
+    override suspend fun deleteLogsForIdentity(identityId: Long) = Unit
 }
 
 private class FakeIdentityRepository(
     private val totalFloorMinutes: Int = 0
 ) : IdentityRepository {
     override fun observeFirstIdentityForExperiment(experimentId: Long): Flow<Identity?> = emptyFlow()
+    override fun observeIdentitiesForExperiment(experimentId: Long): Flow<List<Identity>> = emptyFlow()
     override suspend fun getFirstIdentityForExperiment(experimentId: Long): Identity? = null
+    override suspend fun getIdentitiesForExperiment(experimentId: Long): List<Identity> = emptyList()
     override suspend fun getIdentityById(identityId: Long): Identity? = null
+    override suspend fun getIdentityCountForExperiment(experimentId: Long): Int = 0
     override suspend fun getTotalFloorMinutesForExperiment(experimentId: Long): Int = totalFloorMinutes
     override suspend fun createIdentity(identity: Identity): Long = 0
+    override suspend fun updateIdentity(identity: Identity) = Unit
+    override suspend fun deleteIdentity(identityId: Long) = Unit
     override suspend fun categoryExists(experimentId: Long, category: IdentityCategory): Boolean = false
 }
 

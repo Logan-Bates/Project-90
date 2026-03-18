@@ -12,6 +12,7 @@ import com.logan.project90.domain.model.Identity
 import com.logan.project90.domain.model.IdentityDetail
 import com.logan.project90.domain.model.IdentityAnalytics
 import com.logan.project90.domain.model.SaveLogResult
+import com.logan.project90.domain.model.TodayIdentityCardModel
 import com.logan.project90.domain.model.TodaySlice
 import com.logan.project90.domain.repository.DailyLogRepository
 import com.logan.project90.domain.repository.ExperimentRepository
@@ -24,6 +25,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import java.time.LocalDate
 import kotlin.math.max
+
+private const val MAX_IDENTITY_NAME_LENGTH = 50
+private const val MAX_IDENTITY_STATEMENT_LENGTH = 160
 
 class CompleteOnboardingUseCase(
     private val settingsRepository: SettingsRepository
@@ -70,17 +74,11 @@ class CreateIdentityUseCase(
         importanceWeight: Int,
         createdDate: LocalDate
     ): Result<Pair<Long, String?>> {
-        if (name.isBlank()) return Result.failure(IllegalArgumentException(ValidationMessages.identityNameRequired))
-        if (statement.isBlank()) return Result.failure(IllegalArgumentException(ValidationMessages.identityStatementRequired))
-        if (floorMinutes <= 0) return Result.failure(IllegalArgumentException(ValidationMessages.minutesRange1To1440))
-        if (pushMinutes <= floorMinutes) {
-            return Result.failure(IllegalArgumentException(ValidationMessages.pushGreaterThanFloor))
+        validateIdentityFields(name, statement, floorMinutes, pushMinutes, importanceWeight)?.let {
+            return Result.failure(IllegalArgumentException(it))
         }
-        if (pushMinutes > floorMinutes * 3) {
-            return Result.failure(IllegalArgumentException(ValidationMessages.pushMaxThreeTimesFloor))
-        }
-        if (importanceWeight !in 1..3) {
-            return Result.failure(IllegalArgumentException(ValidationMessages.range1To3))
+        if (identityRepository.getIdentityCountForExperiment(experimentId) >= 4) {
+            return Result.failure(IllegalStateException(ValidationMessages.maxFourIdentities))
         }
         if (identityRepository.categoryExists(experimentId, category)) {
             return Result.failure(
@@ -110,6 +108,83 @@ class CreateIdentityUseCase(
             createdDate = createdDate
         )
         return Result.success(identityRepository.createIdentity(identity) to warning)
+    }
+}
+
+class UpdateIdentityUseCase(
+    private val identityRepository: IdentityRepository,
+    private val settingsRepository: SettingsRepository
+) {
+    suspend operator fun invoke(
+        identityId: Long,
+        name: String,
+        statement: String,
+        category: IdentityCategory,
+        floorMinutes: Int,
+        pushMinutes: Int,
+        importanceWeight: Int
+    ): Result<String?> {
+        validateIdentityFields(name, statement, floorMinutes, pushMinutes, importanceWeight)?.let {
+            return Result.failure(IllegalArgumentException(it))
+        }
+        val existing = identityRepository.getIdentityById(identityId)
+            ?: return Result.failure(IllegalStateException("Identity not found."))
+        val occupiedByOther = identityRepository
+            .getIdentitiesForExperiment(existing.experimentId)
+            .any { it.id != identityId && it.category == category }
+        if (occupiedByOther) {
+            return Result.failure(IllegalStateException(ValidationMessages.oneIdentityPerCategory))
+        }
+        val available = settingsRepository.discretionaryTimeMinutes.first()
+        val warning = buildString {
+            if (floorMinutes > 90) {
+                append(ValidationMessages.floorBurnoutRisk)
+            }
+            if (available != null && floorMinutes > available / 2) {
+                if (isNotEmpty()) append("\n")
+                append(ValidationMessages.floorOverTimeBudget)
+            }
+        }.ifBlank { null }
+        identityRepository.updateIdentity(
+            existing.copy(
+                name = name.trim(),
+                statement = statement.trim(),
+                category = category,
+                floorMinutes = floorMinutes,
+                pushMinutes = pushMinutes,
+                importanceWeight = importanceWeight
+            )
+        )
+        return Result.success(warning)
+    }
+}
+
+class DeleteIdentityUseCase(
+    private val identityRepository: IdentityRepository
+) {
+    suspend operator fun invoke(identityId: Long): Result<Unit> {
+        val existing = identityRepository.getIdentityById(identityId)
+            ?: return Result.failure(IllegalStateException("Identity not found."))
+        identityRepository.deleteIdentity(existing.id)
+        return Result.success(Unit)
+    }
+}
+
+class GetEditableIdentityUseCase(
+    private val identityRepository: IdentityRepository,
+    private val experimentRepository: ExperimentRepository
+) {
+    suspend operator fun invoke(identityId: Long?): Pair<Identity?, List<IdentityCategory>> {
+        val experiment = experimentRepository.getFirstExperiment()
+        val experimentId = experiment?.id ?: return null to IdentityCategory.entries
+        val identities = identityRepository.getIdentitiesForExperiment(experimentId)
+        val editingIdentity = identityId?.let { id -> identities.firstOrNull { it.id == id } }
+        val usedByOthers = identities
+            .filter { it.id != editingIdentity?.id }
+            .map { it.category }
+            .toSet()
+        val availableCategories = IdentityCategory.entries.filterNot { it in usedByOthers }
+        return editingIdentity to availableCategories
     }
 }
 
@@ -283,26 +358,35 @@ class GenerateFeedbackUseCase(
     private val identityRepository: IdentityRepository,
     private val settingsRepository: SettingsRepository
 ) {
-    suspend operator fun invoke(
+    suspend fun experimentFeedback(
         experiment: Experiment,
-        analytics: IdentityAnalytics
-    ): List<FeedbackMessage> {
+        identityCards: List<TodayIdentityCardModel>
+    ): FeedbackMessage? {
+        if (identityCards.isEmpty()) return null
         val discretionaryTime = settingsRepository.discretionaryTimeMinutes.first()
         val totalFloorMinutes = identityRepository.getTotalFloorMinutesForExperiment(experiment.id)
-        return selectFeedback(
-            buildCandidates(
-                analytics = analytics,
-                totalFloorMinutes = totalFloorMinutes,
-                discretionaryTime = discretionaryTime
-            )
-        )
+        val candidates = mutableListOf<FeedbackMessage>()
+
+        identityCards
+            .mapNotNull { identityRiskFeedback(it.analytics) }
+            .minByOrNull { it.priority }
+            ?.let { candidates += it }
+
+        conflictFeedback(totalFloorMinutes, discretionaryTime)?.let { candidates += it }
+
+        if (candidates.isEmpty()) {
+            return identityCards
+                .mapNotNull { identityFeedback(it.analytics) }
+                .minByOrNull { it.priority }
+        }
+
+        return candidates.minByOrNull { it.priority }
     }
 
-    private fun buildCandidates(
-        analytics: IdentityAnalytics,
-        totalFloorMinutes: Int,
-        discretionaryTime: Int?
-    ): List<FeedbackMessage> {
+    fun identityFeedback(analytics: IdentityAnalytics): FeedbackMessage? =
+        buildIdentityCandidates(analytics).minByOrNull { it.priority }
+
+    private fun buildIdentityCandidates(analytics: IdentityAnalytics): List<FeedbackMessage> {
         val candidates = mutableListOf<FeedbackMessage>()
 
         if (analytics.burnoutTrigger) {
@@ -320,15 +404,6 @@ class GenerateFeedbackUseCase(
                 title = "Recovery looks compressed",
                 message = "Recent effort is asking for more recovery. Keep the floor stable and add push only when energy feels more reliable.",
                 priority = 2
-            )
-        }
-
-        if (discretionaryTime != null && totalFloorMinutes > discretionaryTime * 0.70) {
-            candidates += FeedbackMessage(
-                type = FeedbackType.IDENTITY_CONFLICT,
-                title = "Floor load is high",
-                message = "Your total floor targets are taking most of the available time. Simplify the floor before increasing intensity.",
-                priority = 3
             )
         }
 
@@ -368,24 +443,25 @@ class GenerateFeedbackUseCase(
             )
         }
 
-        return candidates.sortedBy { it.priority }
+        return candidates
     }
 
-    private fun selectFeedback(candidates: List<FeedbackMessage>): List<FeedbackMessage> {
-        if (candidates.isEmpty()) return emptyList()
-        val primary = candidates.first()
-        val secondary = candidates
-            .drop(1)
-            .firstOrNull { candidate ->
-                when (primary.type) {
-                    FeedbackType.BURNOUT_RISK -> candidate.type == FeedbackType.IDENTITY_CONFLICT
-                    FeedbackType.RECOVERY_WARNING -> candidate.type == FeedbackType.IDENTITY_CONFLICT
-                    FeedbackType.IDENTITY_CONFLICT -> candidate.type == FeedbackType.RECOVERY_WARNING
-                    FeedbackType.PUSH_GUIDANCE -> false
-                    FeedbackType.POSITIVE_STEADY_STATE -> false
-                }
-            }
-        return listOfNotNull(primary, secondary)
+    private fun identityRiskFeedback(analytics: IdentityAnalytics): FeedbackMessage? =
+        buildIdentityCandidates(analytics)
+            .filter { it.type == FeedbackType.BURNOUT_RISK || it.type == FeedbackType.RECOVERY_WARNING }
+            .minByOrNull { it.priority }
+
+    private fun conflictFeedback(
+        totalFloorMinutes: Int,
+        discretionaryTime: Int?
+    ): FeedbackMessage? {
+        if (discretionaryTime == null || totalFloorMinutes <= discretionaryTime * 0.70) return null
+        return FeedbackMessage(
+            type = FeedbackType.IDENTITY_CONFLICT,
+            title = "Floor load is high",
+            message = "Your total floor targets are taking most of the available time. Simplify the floor before increasing intensity.",
+            priority = 3
+        )
     }
 }
 
@@ -398,48 +474,52 @@ class GetTodaySliceUseCase(
 ) {
     operator fun invoke(referenceDate: LocalDate): Flow<TodaySlice> {
         val experimentFlow = experimentRepository.observeFirstExperiment()
-        val identityFlow = experimentFlow.flatMapLatest { experiment ->
+        val identitiesFlow = experimentFlow.flatMapLatest { experiment ->
             if (experiment == null) {
-                flowOf(null)
+                flowOf(emptyList<Identity>())
             } else {
-                identityRepository.observeFirstIdentityForExperiment(experiment.id)
+                identityRepository.observeIdentitiesForExperiment(experiment.id)
             }
         }
-        val logFlow = identityFlow.flatMapLatest { identity ->
-            if (identity == null) {
-                flowOf(null)
+        val logFlow = identitiesFlow.flatMapLatest { identities ->
+            if (identities.isEmpty()) {
+                flowOf(emptyList<DailyLog>())
             } else {
-                dailyLogRepository.observeLog(identity.id, referenceDate)
+                dailyLogRepository.observeLogsForDate(
+                    identityIds = identities.map { it.id },
+                    date = referenceDate
+                )
             }
         }
 
-        return combine(experimentFlow, identityFlow, logFlow) { experiment, identity, todayLog ->
-            val analytics = if (identity != null) {
-                analyticsUseCase(identity, referenceDate, todayLog)
-            } else {
-                null
-            }
-            val feedback = if (experiment != null && identity != null && analytics != null) {
-                feedbackUseCase(
-                    experiment = experiment,
-                    analytics = analytics
+        return combine(experimentFlow, identitiesFlow, logFlow) { experiment, identities, todayLogs ->
+            val logsByIdentityId = todayLogs.associateBy { it.identityId }
+            val identityCards = identities.map { identity ->
+                val todayLog = logsByIdentityId[identity.id]
+                val analytics = analyticsUseCase(identity, referenceDate, todayLog)
+                TodayIdentityCardModel(
+                    identity = identity,
+                    todayLog = todayLog,
+                    analytics = analytics,
+                    feedback = feedbackUseCase.identityFeedback(analytics)
                 )
-            } else {
-                emptyList()
             }
+            val experimentFeedback = if (experiment != null) {
+                feedbackUseCase.experimentFeedback(
+                    experiment = experiment,
+                    identityCards = identityCards
+                )
+            } else null
             TodaySlice(
                 experiment = experiment,
-                identity = identity,
-                todayLog = todayLog,
-                analytics = analytics,
-                feedback = feedback
+                experimentFeedback = experimentFeedback,
+                identityCards = identityCards
             )
         }
     }
 }
 
 class GetIdentityDetailUseCase(
-    private val experimentRepository: ExperimentRepository,
     private val identityRepository: IdentityRepository,
     private val dailyLogRepository: DailyLogRepository,
     private val analyticsUseCase: CalculateIdentityAnalyticsUseCase,
@@ -447,7 +527,6 @@ class GetIdentityDetailUseCase(
 ) {
     suspend operator fun invoke(identityId: Long, referenceDate: LocalDate): IdentityDetail? {
         val identity = identityRepository.getIdentityById(identityId) ?: return null
-        val experiment = experimentRepository.getFirstExperiment() ?: return null
         val todayLog = dailyLogRepository.getLogsInRange(identityId, referenceDate, referenceDate).firstOrNull()
         val analytics = analyticsUseCase(identity, referenceDate, todayLog)
         val recentLogs = dailyLogRepository.getRecentLogsInRange(
@@ -455,15 +534,30 @@ class GetIdentityDetailUseCase(
             startDate = referenceDate.minusDays(13),
             endDate = referenceDate
         )
-        val feedback = feedbackUseCase(
-            experiment = experiment,
-            analytics = analytics
-        )
         return IdentityDetail(
             identity = identity,
             analytics = analytics,
             recentLogs = recentLogs,
-            feedback = feedback
+            feedback = listOfNotNull(feedbackUseCase.identityFeedback(analytics))
         )
     }
+}
+
+private fun validateIdentityFields(
+    name: String,
+    statement: String,
+    floorMinutes: Int,
+    pushMinutes: Int,
+    importanceWeight: Int
+): String? = when {
+    name.isBlank() -> ValidationMessages.identityNameRequired
+    name.trim().length > MAX_IDENTITY_NAME_LENGTH -> ValidationMessages.identityNameTooLong
+    statement.isBlank() -> ValidationMessages.identityStatementRequired
+    statement.trim().length > MAX_IDENTITY_STATEMENT_LENGTH -> ValidationMessages.identityStatementTooLong
+    floorMinutes <= 0 || floorMinutes > 1440 -> ValidationMessages.minutesRange1To1440
+    pushMinutes <= floorMinutes -> ValidationMessages.pushGreaterThanFloor
+    pushMinutes > 1440 -> ValidationMessages.minutesRange1To1440
+    pushMinutes > floorMinutes * 3 -> ValidationMessages.pushMaxThreeTimesFloor
+    importanceWeight !in 1..3 -> ValidationMessages.range1To3
+    else -> null
 }

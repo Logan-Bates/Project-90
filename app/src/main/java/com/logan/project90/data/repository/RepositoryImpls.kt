@@ -1,10 +1,12 @@
 package com.logan.project90.data.repository
 
+import androidx.room.withTransaction
 import com.logan.project90.core.model.IdentityCategory
 import com.logan.project90.core.model.IdentityStatus
 import com.logan.project90.core.model.ResistanceLevel
 import com.logan.project90.core.util.toEpochDayLong
 import com.logan.project90.core.util.toLocalDate
+import com.logan.project90.data.local.AppDatabase
 import com.logan.project90.data.local.dao.DailyLogDao
 import com.logan.project90.data.local.dao.ExperimentDao
 import com.logan.project90.data.local.dao.IdentityDao
@@ -33,21 +35,43 @@ class ExperimentRepositoryImpl(
 }
 
 class IdentityRepositoryImpl(
-    private val dao: IdentityDao
+    private val dao: IdentityDao,
+    private val dailyLogDao: DailyLogDao,
+    private val database: AppDatabase
 ) : IdentityRepository {
     override fun observeFirstIdentityForExperiment(experimentId: Long): Flow<Identity?> =
         dao.observeFirstIdentityForExperiment(experimentId).map { it?.toDomain() }
 
+    override fun observeIdentitiesForExperiment(experimentId: Long): Flow<List<Identity>> =
+        dao.observeIdentitiesForExperiment(experimentId).map { entities -> entities.map { it.toDomain() } }
+
     override suspend fun getFirstIdentityForExperiment(experimentId: Long): Identity? =
         dao.getFirstIdentityForExperiment(experimentId)?.toDomain()
 
+    override suspend fun getIdentitiesForExperiment(experimentId: Long): List<Identity> =
+        dao.getIdentitiesForExperiment(experimentId).map { it.toDomain() }
+
     override suspend fun getIdentityById(identityId: Long): Identity? =
         dao.getIdentityById(identityId)?.toDomain()
+
+    override suspend fun getIdentityCountForExperiment(experimentId: Long): Int =
+        dao.getIdentityCountForExperiment(experimentId)
 
     override suspend fun getTotalFloorMinutesForExperiment(experimentId: Long): Int =
         dao.getTotalFloorMinutesForExperiment(experimentId)
 
     override suspend fun createIdentity(identity: Identity): Long = dao.insert(identity.toEntity())
+
+    override suspend fun updateIdentity(identity: Identity) {
+        dao.update(identity.toEntity())
+    }
+
+    override suspend fun deleteIdentity(identityId: Long) {
+        database.withTransaction {
+            dailyLogDao.deleteByIdentityId(identityId)
+            dao.deleteById(identityId)
+        }
+    }
 
     override suspend fun categoryExists(experimentId: Long, category: IdentityCategory): Boolean =
         dao.categoryExists(experimentId, category.name)
@@ -59,6 +83,13 @@ class DailyLogRepositoryImpl(
     override fun observeLog(identityId: Long, date: LocalDate): Flow<DailyLog?> =
         dao.observeLog(identityId, date.toEpochDayLong()).map { it?.toDomain() }
 
+    override fun observeLogsForDate(identityIds: List<Long>, date: LocalDate): Flow<List<DailyLog>> =
+        if (identityIds.isEmpty()) {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        } else {
+            dao.observeLogsForDate(identityIds, date.toEpochDayLong()).map { entities -> entities.map { it.toDomain() } }
+        }
+
     override suspend fun upsertLog(log: DailyLog) {
         dao.upsert(log.toEntity())
     }
@@ -68,6 +99,10 @@ class DailyLogRepositoryImpl(
 
     override suspend fun getRecentLogsInRange(identityId: Long, startDate: LocalDate, endDate: LocalDate): List<DailyLog> =
         dao.getRecentLogsInRange(identityId, startDate.toEpochDayLong(), endDate.toEpochDayLong()).map { it.toDomain() }
+
+    override suspend fun deleteLogsForIdentity(identityId: Long) {
+        dao.deleteByIdentityId(identityId)
+    }
 }
 
 private fun ExperimentEntity.toDomain() = Experiment(

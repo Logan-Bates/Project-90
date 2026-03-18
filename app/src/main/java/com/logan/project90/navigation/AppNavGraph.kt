@@ -17,7 +17,10 @@ import com.logan.project90.ui.identity.CreateIdentityScreen
 import com.logan.project90.ui.identity.CreateIdentityViewModel
 import com.logan.project90.ui.identity.IdentityDetailScreen
 import com.logan.project90.ui.identity.IdentityDetailViewModel
+import com.logan.project90.ui.identity.ManageIdentitiesScreen
+import com.logan.project90.ui.identity.ManageIdentitiesViewModel
 import com.logan.project90.ui.identity.PresetSelectionScreen
+import com.logan.project90.ui.identity.PresetSelectionViewModel
 import com.logan.project90.ui.timebudget.TimeBudgetScreen
 import com.logan.project90.ui.timebudget.TimeBudgetViewModel
 import com.logan.project90.ui.today.TodayScreen
@@ -45,7 +48,6 @@ fun AppNavGraph(
                     val target = when {
                         !uiState.onboardingComplete -> AppDestination.TimeBudget.route
                         !uiState.hasExperiment -> AppDestination.CreateExperiment.route
-                        !uiState.hasIdentity -> AppDestination.PresetSelection.route
                         else -> AppDestination.Today.route
                     }
                     navController.navigate(target)
@@ -80,7 +82,11 @@ fun AppNavGraph(
             )
         }
         composable(AppDestination.PresetSelection.route) {
+            val viewModel: PresetSelectionViewModel =
+                viewModel(factory = PresetSelectionViewModel.factory(appContainer))
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             PresetSelectionScreen(
+                uiState = uiState,
                 onPresetSelected = { presetId ->
                     navController.navigate(AppDestination.CreateIdentity.route(presetId))
                 },
@@ -96,12 +102,17 @@ fun AppNavGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = ""
+                },
+                navArgument("identityId") {
+                    type = NavType.LongType
+                    defaultValue = 0L
                 }
             )
         ) { backStackEntry ->
             val presetId = backStackEntry.arguments?.getString("presetId").orEmpty().ifBlank { null }
+            val identityId = backStackEntry.arguments?.getLong("identityId")?.takeIf { it != 0L }
             val viewModel: CreateIdentityViewModel =
-                viewModel(factory = CreateIdentityViewModel.factory(appContainer, presetId))
+                viewModel(factory = CreateIdentityViewModel.factory(appContainer, presetId, identityId))
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             CreateIdentityScreen(
                 uiState = uiState,
@@ -113,8 +124,38 @@ fun AppNavGraph(
                 onWeightChanged = viewModel::updateWeight,
                 onSave = {
                     viewModel.saveIdentity {
+                        val returnedToManage = navController.popBackStack(AppDestination.ManageIdentities.route, false)
+                        if (!returnedToManage) {
+                            navController.navigate(AppDestination.ManageIdentities.route) {
+                                popUpTo(AppDestination.Welcome.route)
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                }
+            )
+        }
+        composable(AppDestination.ManageIdentities.route) {
+            val viewModel: ManageIdentitiesViewModel =
+                viewModel(factory = ManageIdentitiesViewModel.factory(appContainer))
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            ManageIdentitiesScreen(
+                uiState = uiState,
+                onAddIdentity = {
+                    navController.navigate(AppDestination.PresetSelection.route)
+                },
+                onEditIdentity = { identityId ->
+                    navController.navigate(AppDestination.CreateIdentity.route(identityId = identityId))
+                },
+                onDeleteIdentity = viewModel::deleteIdentity,
+                onClearError = viewModel::clearError,
+                onContinue = {
+                    val returnedToToday = navController.popBackStack(AppDestination.Today.route, false)
+                    if (!returnedToToday) {
                         navController.navigate(AppDestination.Today.route) {
-                            popUpTo(AppDestination.Welcome.route)
+                            popUpTo(AppDestination.ManageIdentities.route) {
+                                inclusive = true
+                            }
                             launchSingleTop = true
                         }
                     }
@@ -126,6 +167,8 @@ fun AppNavGraph(
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             TodayScreen(
                 uiState = uiState,
+                onOpenEditor = viewModel::openEditor,
+                onCloseEditor = viewModel::closeEditor,
                 onEffortChanged = viewModel::updateEffortMinutes,
                 onStatusChanged = viewModel::updateStatus,
                 onEnergyChanged = viewModel::updateEnergy,
@@ -135,6 +178,9 @@ fun AppNavGraph(
                 onSave = viewModel::saveLog,
                 onOpenIdentity = { identityId ->
                     navController.navigate(AppDestination.IdentityDetail.route(identityId))
+                },
+                onManageIdentities = {
+                    navController.navigate(AppDestination.ManageIdentities.route)
                 }
             )
         }

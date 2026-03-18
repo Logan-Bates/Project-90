@@ -8,10 +8,10 @@ import com.logan.project90.di.AppContainer
 import com.logan.project90.domain.model.Identity
 import com.logan.project90.ui.components.AppCard
 import com.logan.project90.ui.components.AppScreen
+import com.logan.project90.ui.components.MessageTone
 import com.logan.project90.ui.components.PrimaryButton
 import com.logan.project90.ui.components.ScreenIntro
 import com.logan.project90.ui.components.SupportText
-import com.logan.project90.ui.components.MessageTone
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -26,12 +26,12 @@ data class WelcomeUiState(
 )
 
 class WelcomeViewModel(appContainer: AppContainer) : ViewModel() {
-    private val identityFlow =
+    private val identitiesFlow =
         appContainer.experimentRepository.observeFirstExperiment().flatMapLatest { experiment ->
             if (experiment == null) {
-                flowOf<Identity?>(null)
+                flowOf(emptyList<Identity>())
             } else {
-                appContainer.identityRepository.observeFirstIdentityForExperiment(experiment.id)
+                appContainer.identityRepository.observeIdentitiesForExperiment(experiment.id)
             }
         }
 
@@ -39,12 +39,12 @@ class WelcomeViewModel(appContainer: AppContainer) : ViewModel() {
         combine(
             appContainer.settingsRepository.onboardingComplete,
             appContainer.experimentRepository.observeFirstExperiment(),
-            identityFlow
-        ) { onboardingComplete, experiment, identity ->
+            identitiesFlow
+        ) { onboardingComplete, experiment, identities ->
             WelcomeUiState(
                 onboardingComplete = onboardingComplete,
                 hasExperiment = experiment != null,
-                hasIdentity = identity != null
+                hasIdentity = identities.isNotEmpty()
             )
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), WelcomeUiState())
@@ -63,7 +63,7 @@ fun WelcomeScreen(
     AppScreen {
         ScreenIntro(
             title = "Project 90",
-            subtitle = "Create one experiment, one identity, and log one day with PRD-backed scoring."
+            subtitle = "Create one experiment, build up to four identities, and run the daily loop with PRD-backed scoring."
         )
         AppCard {
             SupportText(

@@ -71,11 +71,14 @@ fun IdentityDetailScreen(
 
 @Composable
 private fun RecentLogRow(log: DailyLog) {
-    ScreenSection(title = log.logDate.toString()) {
+    com.logan.project90.ui.components.AppCard {
+        androidx.compose.material3.Text(
+            text = log.logDate.toString(),
+            style = androidx.compose.material3.MaterialTheme.typography.titleSmall
+        )
         LabeledValue("Status", log.status.name)
         LabeledValue("Effort", "${log.effortMinutes} min")
-        LabeledValue("Energy", log.energy.toString())
-        LabeledValue("Mood", log.mood.toString())
+        LabeledValue("Energy / Mood", "${log.energy} / ${log.mood}")
         LabeledValue("Resistance", log.resistance.name)
         if (log.reflection.isNotBlank()) {
             SupportText(text = log.reflection)

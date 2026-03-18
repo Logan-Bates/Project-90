@@ -64,12 +64,17 @@ data class FeedbackMessage(
     val priority: Int
 )
 
+data class TodayIdentityCardModel(
+    val identity: Identity,
+    val todayLog: DailyLog?,
+    val analytics: IdentityAnalytics,
+    val feedback: FeedbackMessage?
+)
+
 data class TodaySlice(
     val experiment: Experiment?,
-    val identity: Identity?,
-    val todayLog: DailyLog?,
-    val analytics: IdentityAnalytics?,
-    val feedback: List<FeedbackMessage> = emptyList()
+    val experimentFeedback: FeedbackMessage?,
+    val identityCards: List<TodayIdentityCardModel> = emptyList()
 )
 
 data class SaveLogResult(
